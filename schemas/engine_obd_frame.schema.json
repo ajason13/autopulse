@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AutoPulse Engine Data Frame (US-001)",
+  "description": "Strict schema for single sensor frames capturing core engine health PIDs.",
+  "type": "object",
+  "required": [
+    "timestamp",
+    "vin_hashed",
+    "protocol",
+    "engine_rpm",
+    "vehicle_speed",
+    "coolant_temp",
+    "engine_load",
+    "stft_bank1",
+    "ltft_bank1"
+  ],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "vin_hashed": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "SAE_J1979",
+        "SAE_J1979_2"
+      ]
+    },
+    "engine_rpm": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 9500.0
+    },
+    "vehicle_speed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "coolant_temp": {
+      "type": "number",
+      "minimum": -40.0,
+      "maximum": 140.0
+    },
+    "engine_load": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 100.0
+    },
+    "stft_bank1": {
+      "type": "number",
+      "minimum": -50.0,
+      "maximum": 50.0
+    },
+    "ltft_bank1": {
+      "type": "number",
+      "minimum": -50.0,
+      "maximum": 50.0
+    }
+  },
+  "additionalProperties": false
+}
