@@ -1,0 +1,5 @@
+jsonschema
+pytest
+pandas
+numpy
+python-dotenv

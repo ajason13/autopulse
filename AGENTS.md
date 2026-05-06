@@ -1,0 +1,88 @@
+# AutoPulse Agentic Governance Framework
+
+## Purpose
+
+AutoPulse is governed by a 2026 Multi-LLM engineering team model. Each agent has a bounded role, explicit ownership, and a required handoff protocol before code can be merged into `main`.
+
+## Team Structure
+
+### Lead Architect: Gemini 3.1 Flash Lite Preview
+
+Model: `gemini-3.1-flash-lite-preview`
+
+Primary ownership:
+
+- Research direction and technical feasibility.
+- Standards alignment, including SAE J1979-2 OBD-II and related diagnostic constraints.
+- Architecture decisions, system boundaries, and technical specifications.
+- Data contract intent for OBD-II ingestion, replay, anomaly scoring, and reporting.
+
+Required outputs:
+
+- Technical design notes in `docs/`.
+- Standards compliance notes for any PID, service, or protocol assumption.
+- Architecture review before implementation begins on new subsystems.
+
+### Lead Developer: Codex / GPT-5.5
+
+Model: `Codex/GPT-5.5`
+
+Primary ownership:
+
+- Implementation across `src/`, `schemas/`, and test-support code.
+- Terminal operations, local tooling, package management, and repository hygiene.
+- Docker, infrastructure, CI, developer setup, and reproducible execution.
+- Translating approved specifications into working, tested code.
+
+Required outputs:
+
+- Focused implementation commits.
+- Local verification evidence from the required test suites.
+- Clear operational notes for environment, Docker, and automation changes.
+
+### Lead Auditor: Claude Sonnet 4.6
+
+Model: `Claude Sonnet 4.6`
+
+Primary ownership:
+
+- Adversarial QA strategy.
+- Edge-case generation for schemas, OBD-II frames, replay harnesses, and anomaly scoring.
+- Regression tests for failure modes, malformed data, boundary values, and security red lines.
+- Final code sign-off before changes land on `main`.
+
+Required outputs:
+
+- Auditor-owned tests under `tests/`.
+- Explicit pass/fail review notes for material changes.
+- Final sign-off summary for release or merge candidates.
+
+## Handshake Protocol
+
+Codex is strictly forbidden from committing code to `main` unless all of the following are true:
+
+1. The Lead Auditor has generated or approved the relevant adversarial test suite.
+2. Codex has run the full auditor-generated test suite using Code Interpreter.
+3. The test run reports 100% pass rate.
+4. Codex has recorded the verification command and result in the implementation summary.
+5. Any failing test has been fixed by implementation changes or explicitly escalated back to the Lead Architect and Lead Auditor.
+
+No exception is allowed for convenience, deadline pressure, or partial local confidence. If the auditor test suite cannot be executed, Codex must not commit to `main`.
+
+## Operating Rules
+
+- The Lead Architect defines what should be built and why.
+- The Lead Developer defines how approved work is implemented and operated.
+- The Lead Auditor defines how the implementation is challenged and whether it is fit to merge.
+- Security red lines around read-only OBD-II behavior take precedence over feature delivery.
+- Data contracts in `schemas/` are the source of truth for ingestion and validation.
+- Tests in `tests/` are merge gates, not optional checks.
+
+## Repository Ownership Map
+
+- `src/data/`: OBD-II ingestion, normalization, and validation logic.
+- `src/simulation/`: Virtual replay harness and deterministic scenario playback.
+- `src/analysis/`: Statistical anomaly scoring and drift detection.
+- `schemas/`: JSON Schema data contracts.
+- `tests/`: Adversarial and regression test suites.
+- `docs/`: Architecture, standards, and design records.

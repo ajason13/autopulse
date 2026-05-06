@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AutoPulse data and model artifacts
+data/raw/
+data/processed/
+*.dbc
+models/*.joblib
