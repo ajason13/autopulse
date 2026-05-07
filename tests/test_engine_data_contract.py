@@ -17,119 +17,14 @@ table in US-001 and the canonical JSON Schema defined therein.
 
 import copy
 import pytest
-from jsonschema import validate, ValidationError
+from jsonschema import ValidationError
 
-# ──────────────────────────────────────────────────────────────────────────────
-# US-001 CANONICAL SCHEMA  (verbatim from the Engineering Architecture Report)
-# ──────────────────────────────────────────────────────────────────────────────
-
-US_001_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "AutoPulse Engine Data Frame (US-001)",
-    "description": "Strict schema for single sensor frames capturing core engine health PIDs.",
-    "type": "object",
-    "required": [
-        "timestamp",
-        "vin_hashed",
-        "protocol",
-        "engine_rpm",
-        "vehicle_speed",
-        "coolant_temp",
-        "engine_load",
-        "stft_bank1",
-        "ltft_bank1",
-    ],
-    "properties": {
-        "timestamp": {
-            "type": "string",
-            "format": "date-time",
-        },
-        "vin_hashed": {
-            "type": "string",
-            "pattern": "^[a-f0-9]{64}$",
-        },
-        "protocol": {
-            "type": "string",
-            "enum": ["SAE_J1979", "SAE_J1979_2"],
-        },
-        "engine_rpm": {
-            "type": "number",
-            "minimum": 0.0,
-            "maximum": 9500.0,
-        },
-        "vehicle_speed": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 255,
-        },
-        "coolant_temp": {
-            "type": "number",
-            "minimum": -40.0,
-            "maximum": 140.0,
-        },
-        "engine_load": {
-            "type": "number",
-            "minimum": 0.0,
-            "maximum": 100.0,
-        },
-        "stft_bank1": {
-            "type": "number",
-            "minimum": -50.0,
-            "maximum": 50.0,
-        },
-        "ltft_bank1": {
-            "type": "number",
-            "minimum": -50.0,
-            "maximum": 50.0,
-        },
-    },
-    "additionalProperties": False,
-}
-
-# ──────────────────────────────────────────────────────────────────────────────
-# SECURITY RED LINES — enforced by the command-filter layer
-# Services that must NEVER be transmitted to the CAN bus.
-# ──────────────────────────────────────────────────────────────────────────────
-
-RESTRICTED_SERVICE_IDS = {
-    0x08,  # J1979 Mode 0x08 — Request Control of On-Board System
-    0x31,  # UDS Service 0x31  — RoutineControl (StartRoutine / StopRoutine)
-    0x04,  # J1979 Mode 0x04  — Clear / Reset Diagnostic Information
-    0x14,  # UDS Service 0x14  — ClearDiagnosticInformation
-    0x2E,  # UDS Service 0x2E  — WriteDataByIdentifier
-    0x10,  # UDS Service 0x10  — DiagnosticSessionControl (enter programming)
-}
-
-
-class SecurityViolationRedLine(Exception):
-    """
-    Raised by the command-filter whenever a CAN frame carries a restricted
-    Service ID.  Downstream code must NEVER catch-and-swallow this exception.
-    """
-    def __init__(self, service_id: int):
-        self.service_id = service_id
-        super().__init__(
-            f"SECURITY_VIOLATION_RED_LINE: Restricted Service ID "
-            f"0x{service_id:02X} was intercepted and blocked."
-        )
-
-
-def command_filter(service_id: int) -> None:
-    """
-    Firmware-equivalent command filter.
-    Drops the frame and raises SecurityViolationRedLine if the requested
-    Service ID appears in the restricted set.
-    """
-    if service_id in RESTRICTED_SERVICE_IDS:
-        raise SecurityViolationRedLine(service_id)
-
-
-def validate_frame(frame: dict) -> None:
-    """
-    Thin wrapper around jsonschema.validate using the US-001 schema.
-    Re-raises ValidationError so callers receive typed exceptions.
-    """
-    validate(instance=frame, schema=US_001_SCHEMA)
+from src.data.validator import (
+    RESTRICTED_SERVICE_IDS,
+    SecurityViolationRedLine,
+    command_filter,
+    validate_frame,
+)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
