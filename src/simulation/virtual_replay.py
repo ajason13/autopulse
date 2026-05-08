@@ -13,7 +13,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Optional, Protocol
+from types import MappingProxyType
+from typing import Any, Iterable, Mapping, Optional, Protocol
 
 from jsonschema import ValidationError
 
@@ -62,6 +63,7 @@ PROTOCOL_ALIASES = {
 }
 
 REPLAY_PROTOCOLS = frozenset({"J1979_MODE01", "J1979_2_SERVICE22"})
+SLEEP_GUARD_SECONDS = 0.002
 
 
 class SecurityViolationError(Exception):
@@ -96,7 +98,11 @@ class DataPacket:
     engine_load: float
     stft_bank1: float
     ltft_bank1: float
-    _raw: dict[str, Any] = field(default_factory=dict, repr=False)
+    _raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        """Freeze the raw source snapshot used for audit trails."""
+        object.__setattr__(self, "_raw", MappingProxyType(dict(self._raw)))
 
     def to_dict(self) -> dict[str, Any]:
         """Return the replay-facing frame payload."""
@@ -115,7 +121,10 @@ class DataPacket:
     def to_schema_dict(self) -> dict[str, Any]:
         """Return the canonical US-001 schema payload."""
         payload = self.to_dict()
-        payload["protocol"] = PROTOCOL_ALIASES[self.protocol]
+        payload["protocol"] = PROTOCOL_ALIASES.get(
+            self.protocol,
+            self.protocol,
+        )
         return payload
 
 
@@ -132,7 +141,12 @@ class LogProvider(ABC):
 
 
 class JSONLProvider(LogProvider):
-    """Provider backed by a JSONL file path or in-memory dictionaries."""
+    """Provider backed by a JSONL file path or in-memory dictionaries.
+
+    This provider eagerly loads source rows so replay can reset and loop with a
+    stable in-memory pointer. Production-scale CAN logs should use a future
+    streaming provider with bounded buffering.
+    """
 
     def __init__(
         self,
@@ -183,7 +197,12 @@ class JSONLProvider(LogProvider):
 
 
 class CSVProvider(LogProvider):
-    """Provider backed by a CSV file path or in-memory CSV-style rows."""
+    """Provider backed by a CSV file path or in-memory CSV-style rows.
+
+    This provider eagerly loads source rows so replay can reset and loop with a
+    stable in-memory pointer. Production-scale CAN logs should use a future
+    streaming provider with bounded buffering.
+    """
 
     def __init__(
         self,
@@ -466,15 +485,18 @@ class MockAdapter(OBDAdapter):
     @staticmethod
     def _int_field(row: dict[str, Any], field_name: str) -> int:
         value = row[field_name]
-        if isinstance(value, bool) or not isinstance(value, int):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValidationError(f"Field '{field_name}' has invalid type.")
+        numeric = float(value)
         lower, upper = US001_BOUNDS[field_name]
-        if not lower <= value <= upper:
+        if not lower <= numeric <= upper:
             raise ValidationError(
-                f"Field '{field_name}' value {value} out of bounds "
+                f"Field '{field_name}' value {numeric} out of bounds "
                 f"[{lower}, {upper}]."
             )
-        return value
+        if isinstance(value, float) and not value.is_integer():
+            raise ValidationError(f"Field '{field_name}' has invalid type.")
+        return int(value)
 
     @staticmethod
     def _validate_packet(packet: DataPacket) -> None:
@@ -494,14 +516,28 @@ class LogReplayer:
             raise ValueError("frequency_hz must be positive.")
         if drift < 0:
             raise ValueError("drift must be non-negative.")
+        self._validate_drift_budget(frequency_hz, drift)
         self._adapter = adapter
         self._frequency_hz = frequency_hz
         self._drift = drift
         self._running = False
         self._thread: Optional[threading.Thread] = None
-        self.frames: list[DataPacket] = []
-        self.errors: list[Exception] = []
+        self._lock = threading.Lock()
+        self._frames: list[DataPacket] = []
+        self._errors: list[Exception] = []
         self._dispatch_timestamps: list[float] = []
+
+    @property
+    def frames(self) -> list[DataPacket]:
+        """Return a stable snapshot of collected frames."""
+        with self._lock:
+            return list(self._frames)
+
+    @property
+    def errors(self) -> list[Exception]:
+        """Return a stable snapshot of collected replay errors."""
+        with self._lock:
+            return list(self._errors)
 
     def set_speed(self, multiplier: float) -> None:
         if multiplier <= 0:
@@ -509,6 +545,7 @@ class LogReplayer:
         self._frequency_hz = round(self._frequency_hz * multiplier)
         if self._frequency_hz <= 0:
             raise ValueError("Speed multiplier produced zero frequency.")
+        self._validate_drift_budget(self._frequency_hz, self._drift)
 
     def start(self, max_frames: Optional[int] = None) -> None:
         self._running = True
@@ -532,32 +569,45 @@ class LogReplayer:
 
     @property
     def inter_frame_intervals(self) -> list[float]:
-        timestamps = self._dispatch_timestamps
+        with self._lock:
+            timestamps = list(self._dispatch_timestamps)
         return [
             timestamps[index + 1] - timestamps[index]
             for index in range(len(timestamps) - 1)
         ]
 
+    @staticmethod
+    def _validate_drift_budget(frequency_hz: int, drift: float) -> None:
+        if drift >= 1.0 / frequency_hz:
+            raise ValueError("drift must be less than the frame interval.")
+
     def _run_loop(self, max_frames: Optional[int]) -> None:
         interval = 1.0 / self._frequency_hz
         count = 0
+        next_dispatch = time.perf_counter()
         while self._running:
             if max_frames is not None and count >= max_frames:
                 self._running = False
                 break
             started_at = time.perf_counter()
-            self._dispatch_timestamps.append(started_at)
+            with self._lock:
+                self._dispatch_timestamps.append(started_at)
             try:
                 if self._drift:
                     time.sleep(self._drift)
-                self.frames.append(self._adapter.fetch_frame())
+                frame = self._adapter.fetch_frame()
+                with self._lock:
+                    self._frames.append(frame)
             except StopIteration:
                 self._running = False
                 break
             except Exception as exc:
-                self.errors.append(exc)
-            elapsed = time.perf_counter() - started_at
-            sleep_for = interval - elapsed
+                with self._lock:
+                    self._errors.append(exc)
+            next_dispatch += interval
+            sleep_for = (
+                next_dispatch - time.perf_counter() - SLEEP_GUARD_SECONDS
+            )
             if sleep_for > 0:
                 time.sleep(sleep_for)
             count += 1
