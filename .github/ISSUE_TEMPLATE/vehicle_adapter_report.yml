@@ -1,0 +1,65 @@
+name: Vehicle / adapter compatibility report
+description: Report behavior tied to a vehicle, adapter, OS, or data source.
+title: "Compatibility: "
+labels:
+  - compatibility
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include full VINs, license plates, credentials, or private logs.
+
+  - type: input
+    id: vehicle
+    attributes:
+      label: Vehicle year, make, and model
+      placeholder: "Example: 2018 Toyota Camry"
+    validations:
+      required: true
+
+  - type: input
+    id: engine
+    attributes:
+      label: Engine or trim
+      placeholder: "Example: 2.5L I4, Hybrid, Sport trim"
+
+  - type: input
+    id: adapter
+    attributes:
+      label: Adapter or data source
+      placeholder: "Example: ELM327 clone, OBDLink MX+, CANdid JSONL"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Example: macOS 15, Ubuntu 24.04, Windows 11"
+
+  - type: input
+    id: version
+    attributes:
+      label: AutoPulse version or commit
+      placeholder: "main, commit SHA, or release tag"
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Logs or sample PID/CAN data
+      description: Redact private identifiers and secrets before submitting.
+      render: text
