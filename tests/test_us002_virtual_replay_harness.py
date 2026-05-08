@@ -1286,14 +1286,29 @@ class TestSpecTestVectors:
 class TestProductionCandidParser:
     """Production parser tests for known CANdid decode boundary behavior."""
 
+    @pytest.mark.parametrize(
+        "pid,field_name",
+        [
+            ("0x06", "stft_bank1"),
+            ("0x07", "ltft_bank1"),
+        ],
+    )
     @pytest.mark.parametrize("raw_byte", ["00", "FF"])
-    def test_fuel_trim_byte_extremes_rejected_by_us001(self, raw_byte):
-        row = _good_row(pid="0x06", data=raw_byte)
+    def test_fuel_trim_byte_extremes_rejected_by_us001(
+        self,
+        pid,
+        field_name,
+        raw_byte,
+    ):
+        row = _good_row(pid=pid, data=raw_byte)
         provider = ProdJSONLProvider([row], parser=ProdCandidParser())
         adapter = ProdMockAdapter(provider)
         adapter.connect()
 
-        with pytest.raises(JsonSchemaValidationError, match="stft_bank1"):
+        with pytest.raises(JsonSchemaValidationError) as exc_info:
             adapter.fetch_frame()
 
+        message = str(exc_info.value)
+        assert field_name in message
+        assert "out of bounds" in message
         adapter.disconnect()
