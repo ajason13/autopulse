@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Syntax check
+        run: |
+          python -m py_compile \
+            src/data/validator.py \
+            src/simulation/virtual_replay.py \
+            src/simulation/__init__.py \
+            src/adapters.py \
+            src/providers.py \
+            src/noise.py \
+            src/replayer.py
+
+      - name: Run US-001 tests
+        run: python -m pytest tests/test_engine_data_contract.py -q
+
+      - name: Run US-002 tests
+        run: python -m pytest tests/test_us002_virtual_replay_harness.py -q
