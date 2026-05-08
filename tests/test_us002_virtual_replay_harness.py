@@ -33,6 +33,7 @@ import pytest
 from jsonschema import ValidationError as JsonSchemaValidationError
 
 from src.simulation import (
+    CandidParser as ProdCandidParser,
     DataPacket as ProdDataPacket,
     JSONLProvider as ProdJSONLProvider,
     LogReplayer as ProdLogReplayer,
@@ -1280,3 +1281,19 @@ class TestSpecTestVectors:
         )
 
         assert packet.to_schema_dict()["protocol"] == "UNKNOWN_PROTOCOL"
+
+
+class TestProductionCandidParser:
+    """Production parser tests for known CANdid decode boundary behavior."""
+
+    @pytest.mark.parametrize("raw_byte", ["00", "FF"])
+    def test_fuel_trim_byte_extremes_rejected_by_us001(self, raw_byte):
+        row = _good_row(pid="0x06", data=raw_byte)
+        provider = ProdJSONLProvider([row], parser=ProdCandidParser())
+        adapter = ProdMockAdapter(provider)
+        adapter.connect()
+
+        with pytest.raises(JsonSchemaValidationError, match="stft_bank1"):
+            adapter.fetch_frame()
+
+        adapter.disconnect()

@@ -250,7 +250,13 @@ class CSVProvider(LogProvider):
 
 
 class CandidParser:
-    """Decode simple CANdid-style OBD-II PID rows into normalized fields."""
+    """Decode simple CANdid-style OBD-II PID rows into normalized fields.
+
+    Fuel-trim PIDs 0x06 and 0x07 use the OBD-II formula
+    ``(A / 128 - 1) * 100``. Raw byte extremes can decode outside the
+    AutoPulse US-001 ``[-50, 50]`` physical contract; those frames are left
+    unclamped so the schema gate rejects them as dirty replay input.
+    """
 
     def parse(self, row: dict[str, Any]) -> dict[str, Any]:
         parsed = dict(row)
