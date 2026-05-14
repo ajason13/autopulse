@@ -17,3 +17,18 @@ An educational, read-only OBD-II anomaly detection framework that learns a vehic
 - `schemas/`: JSON data contracts.
 - `tests/`: Adversarial test suites.
 - `docs/`: Technical design documents.
+
+## Documentation Site
+
+AutoPulse uses a Starlight-based documentation site for specifications and guides.
+
+To run the docs locally:
+
+```sh
+cd grubby-galaxy
+nvm use
+npm install
+npm run dev
+```
+
+See [grubby-galaxy/README.md](grubby-galaxy/README.md) for full setup and build details.

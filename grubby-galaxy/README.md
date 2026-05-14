@@ -1,16 +1,46 @@
-# Starlight Starter Kit: Basics
+# AutoPulse Documentation Site (Starlight)
 
-[![Built with Starlight](https://astro.badg.es/v2/built-with-starlight/tiny.svg)](https://starlight.astro.build)
+This directory contains the source code for the AutoPulse documentation site, built with [Starlight](https://starlight.astro.build/).
 
+## Local Development
+
+To run the documentation site locally, follow these steps:
+
+```sh
+# Navigate to the docs directory
+cd grubby-galaxy
+
+# Initialize nvm (if not already in your shell)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+# Use the project Node version and start development
+nvm use
+npm install
+npm run dev
 ```
-npm create astro@latest -- --template starlight
+
+The site will be available at [http://localhost:4321](http://localhost:4321).
+
+## Build and Preview
+
+To create a production build and preview it:
+
+```sh
+npm run build
+npm run preview
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Key Documentation
+
+The specifications are available at the following local routes (when the dev server is running):
+
+- [/specs/us-001-engine-data-contract/](/specs/us-001-engine-data-contract/)
+- [/specs/us-002-virtual-replay-harness/](/specs/us-002-virtual-replay-harness/)
 
 ## 🚀 Project Structure
 
-Inside of your Astro + Starlight project, you'll see the following folders and files:
+Inside this folder, you'll see:
 
 ```
 .
@@ -25,15 +55,11 @@ Inside of your Astro + Starlight project, you'll see the following folders and f
 └── tsconfig.json
 ```
 
-Starlight looks for `.md` or `.mdx` files in the `src/content/docs/` directory. Each file is exposed as a route based on its file name.
+- `src/content/docs/`: Where the `.md` or `.mdx` pages live.
+- `src/assets/`: Images and other assets.
+- `public/`: Static assets like favicons.
 
-Images can be added to `src/assets/` and embedded in Markdown with a relative link.
-
-Static assets, like favicons, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
+## Commands
 
 | Command                   | Action                                           |
 | :------------------------ | :----------------------------------------------- |
@@ -42,8 +68,7 @@ All commands are run from the root of the project, from a terminal:
 | `npm run build`           | Build your production site to `./dist/`          |
 | `npm run preview`         | Preview your build locally, before deploying     |
 | `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
 
-## 👀 Want to learn more?
+## 👀 Learn More
 
-Check out [Starlight’s docs](https://starlight.astro.build/), read [the Astro documentation](https://docs.astro.build), or jump into the [Astro Discord server](https://astro.build/chat).
+Check out [Starlight’s docs](https://starlight.astro.build/) or the [Astro documentation](https://docs.astro.build).
