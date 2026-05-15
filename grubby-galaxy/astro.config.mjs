@@ -11,8 +11,7 @@ export default defineConfig({
 			title: 'AutoPulse Docs',
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/ajason13/autopulse' }],
 			sidebar: [
-...
-
+				{
 					label: 'Guides',
 					items: [
 						// Each item here is one entry in the navigation menu.
