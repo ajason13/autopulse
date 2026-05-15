@@ -78,6 +78,20 @@ No exception is allowed for convenience, deadline pressure, or partial local con
 - Data contracts in `schemas/` are the source of truth for ingestion and validation.
 - Tests in `tests/` are merge gates, not optional checks.
 
+## Local Codex Skills
+
+Codex may use reusable local skills from `~/.codex/skills/` to improve consistency and token efficiency.
+
+Recommended skills for this repository:
+
+- `model-routing`: Choose the smallest safe model and reasoning effort for each task.
+- `pr-prep`: Prepare PR summaries, verification notes, and risk sections.
+- `audit-response`: Handle Claude/auditor findings with reproduction, focused fixes, and verification.
+- `docs-publishing`: Convert specs and research notes into public documentation.
+- `local-dev-handoff`: Document setup, build, test, preview, and environment commands.
+
+Repository governance in this `AGENTS.md` takes precedence over any reusable skill. Security red lines, source-of-truth rules, and the `main` merge handshake cannot be relaxed by a skill.
+
 ## Repository Ownership Map
 
 - `src/data/`: OBD-II ingestion, normalization, and validation logic.
