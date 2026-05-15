@@ -1,40 +1,46 @@
 ---
-title: Welcome to Starlight
-description: Get started building your docs site with Starlight.
-template: splash # Remove or comment out this line to display the site sidebar on this page.
-hero:
-  tagline: Congrats on setting up a new Starlight project!
-  image:
-    file: ../../assets/houston.webp
-  actions:
-    - text: Example Guide
-      link: /guides/example/
-      icon: right-arrow
-    - text: Read the Starlight docs
-      link: https://starlight.astro.build
-      icon: external
-      variant: minimal
+title: AutoPulse Documentation
+description: Technical documentation for AutoPulse data contracts, replay harnesses, validation evidence, and developer workflows.
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-## Next steps
+# AutoPulse Documentation
 
-<CardGrid stagger>
-	<Card title="Update content" icon="pencil">
-		Edit `src/content/docs/index.mdx` to see this page change.
+AutoPulse is a read-only OBD-II anomaly detection framework. These docs publish the current technical source of truth for ingestion contracts, replay simulation, validation evidence, and local development workflows.
+
+## Specs
+
+<CardGrid>
+	<LinkCard
+		title="US-001: Engine Data Contract"
+		description="Strict sensor-frame schema, core read-only PIDs, security red lines, and research-backed detection claims."
+		href="/specs/us-001-engine-data-contract/"
+	/>
+	<LinkCard
+		title="US-002: Virtual Replay Harness"
+		description="Dataset mapping, mock adapter design, replay synchronization modes, and dirty replay resilience strategy."
+		href="/specs/us-002-virtual-replay-harness/"
+	/>
+</CardGrid>
+
+## Reference
+
+<CardGrid>
+	<LinkCard
+		title="Empirical Validation"
+		description="Validation notes and research evidence used by the AutoPulse technical specifications."
+		href="/reference/empirical-validation/"
+	/>
+</CardGrid>
+
+## Developer Entry Points
+
+<CardGrid>
+	<Card title="Run Locally" icon="setting">
+		Start from `grubby-galaxy/README.md` for Node, `nvm`, build, preview, and local dev-server commands.
 	</Card>
-	<Card title="Change page layout" icon="document">
-		Delete `template: splash` in `src/content/docs/index.mdx` to display a
-		sidebar on this page.
-	</Card>
-	<Card title="Add new content" icon="add-document">
-		Add Markdown or MDX files to `src/content/docs` to create new pages.
-	</Card>
-	<Card title="Configure your site" icon="setting">
-		Edit your `sidebar` and other config in `astro.config.mjs`.
-	</Card>
-	<Card title="Read the docs" icon="open-book">
-		Learn more in [the Starlight Docs](https://starlight.astro.build/).
+	<Card title="Contribute Docs" icon="pencil">
+		Add new Markdown or MDX pages under `src/content/docs/` and wire them into the Starlight sidebar when needed.
 	</Card>
 </CardGrid>
