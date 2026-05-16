@@ -3,7 +3,7 @@ title: US-001 Engine Data Contract
 description: Strict read-only OBD-II sensor frame contract for AutoPulse engine telemetry ingestion.
 ---
 
-US-001 defines the canonical engine telemetry frame consumed by AutoPulse ingestion, replay, anomaly scoring, and reporting. It is intentionally narrow: every accepted frame must carry the six core read-only engine PIDs plus timestamp, hashed VIN, and protocol identity.
+US-001 defines the canonical engine telemetry frame consumed by AutoPulse ingestion, replay, anomaly scoring, and reporting. It is intentionally narrow: every accepted frame must carry the six core read-only engine PIDs plus timestamp, hashed VIN, and protocol identity. Optional read-only enrichment fields are explicitly enumerated so `additionalProperties: false` remains enforceable.
 
 The contract is enforced in `schemas/engine_obd_frame.schema.json` and loaded by `src/data/validator.py`.
 
@@ -61,6 +61,11 @@ US-001 accepts only passive diagnostic data from SAE J1979 Mode 01 or SAE J1979-
       "minimum": -40.0,
       "maximum": 140.0
     },
+    "ambient_temp": {
+      "type": "number",
+      "minimum": -40.0,
+      "maximum": 80.0
+    },
     "engine_load": {
       "type": "number",
       "minimum": 0.0,
@@ -93,6 +98,14 @@ US-001 accepts only passive diagnostic data from SAE J1979 Mode 01 or SAE J1979-
 | `0x07` | `ltft_bank1` | SAE J1979 Mode 01 | `(A / 128 - 1) * 100` percent | `-50.0` to `50.0` |
 
 The schema limits are physical guardrails, not simply protocol maxima. For example, SAE J1979 can encode RPM above passenger-engine operating reality, but AutoPulse rejects values above `9500.0` rpm because they represent parser error, sensor fault, or dirty replay input for the supported vehicle class.
+
+## Optional Read-Only PIDs
+
+| PID | Field | Source standard | Formula or encoding | Accepted range |
+| --- | --- | --- | --- | --- |
+| `0x46` | `ambient_temp` | SAE J1979 Mode 01 | `A - 40` deg C | `-40.0` to `80.0` |
+
+`ambient_temp` is optional because US-001's core ingestion contract is limited to the six engine health PIDs. US-003 uses it when present to compute the HDF cooling delta. Frames without `ambient_temp` remain valid and can still be evaluated for OSF and statistical anomalies.
 
 ## Security Red Lines
 

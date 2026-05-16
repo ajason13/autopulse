@@ -86,6 +86,10 @@ class TestSchemaHappyPath:
         )
         validate_frame(frame)
 
+    def test_optional_ambient_temp_accepted(self):
+        """PID 0x46 may be present for HDF ΔT calculations but is not core."""
+        validate_frame(mutate(GOLDEN_FRAME, ambient_temp=22.0))
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # §2  SCHEMA VALIDATION — Missing Required Fields
@@ -252,6 +256,27 @@ class TestCoolantTemperatureBoundaries:
         """A shorted NTC thermistor may output a constant 200°C — must be blocked."""
         with pytest.raises(ValidationError):
             validate_frame(mutate(GOLDEN_FRAME, coolant_temp=200.0))
+
+
+class TestAmbientTemperatureBoundaries:
+    """
+    Optional PID 0x46 is permitted for HDF calculations while preserving the
+    strict no-undocumented-fields ingestion boundary.
+    """
+
+    def test_ambient_at_minimum_neg40_accepted(self):
+        validate_frame(mutate(GOLDEN_FRAME, ambient_temp=-40.0))
+
+    def test_ambient_at_maximum_80_accepted(self):
+        validate_frame(mutate(GOLDEN_FRAME, ambient_temp=80.0))
+
+    def test_ambient_below_minimum_rejected(self):
+        with pytest.raises(ValidationError):
+            validate_frame(mutate(GOLDEN_FRAME, ambient_temp=-41.0))
+
+    def test_ambient_above_maximum_rejected(self):
+        with pytest.raises(ValidationError):
+            validate_frame(mutate(GOLDEN_FRAME, ambient_temp=81.0))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

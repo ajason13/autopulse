@@ -734,6 +734,14 @@ class TestPdMAlertSchema:
         alert = self._make_alert(failure_type="OSF_ANOMALY", failure_probability=0.72, is_anomaly=True)
         assert alert.failure_type == "OSF_ANOMALY"
 
+    def test_failure_type_statistical_anomaly_accepted(self):
+        alert = self._make_alert(
+            failure_type="STATISTICAL_ANOMALY",
+            failure_probability=0.85,
+            is_anomaly=True,
+        )
+        assert alert.failure_type == "STATISTICAL_ANOMALY"
+
     def test_failure_type_none_is_normal_state(self):
         alert = self._make_alert(failure_type="NONE")
         assert alert.failure_type == "NONE"
@@ -944,12 +952,12 @@ class TestAlgorithmicExecutionSequence:
         assert alert.failure_probability == 1.0
         assert alert.is_anomaly is True
 
-    def test_missing_ambient_temp_produces_sensor_error(self):
-        """Step 1 guard: missing PID 0x46 → SENSOR_ERROR, cycle aborted."""
-        frame = _good_frame()
+    def test_missing_ambient_temp_skips_hdf_only(self):
+        """Core US-001 frames without PID 0x46 still process non-HDF branches."""
+        frame = _good_frame(engine_rpm=1_200.0, engine_load=5.0)
         del frame["ambient_temp"]
         alert = self._process_frame(frame)
-        assert alert.failure_type == "SENSOR_ERROR"
+        assert alert.failure_type == "NONE"
         assert alert.is_anomaly is False
 
     def test_obd_frame_attached_to_alert_for_auditability(self):
@@ -987,6 +995,88 @@ class TestAlgorithmicExecutionSequence:
         assert alert.failure_type == "OSF"
         assert alert.failure_probability == 1.0
         assert alert.is_anomaly is True
+
+    def test_statistical_outlier_promotes_alert(self):
+        """Extreme rolling-window outliers must affect alert classification."""
+        processor = PdMProcessor(vin_hashed=_BASE_VIN)
+        for offset in range(59):
+            frame = _good_frame(
+                timestamp=f"2025-07-04T14:22:{offset:02d}.000Z",
+                coolant_temp=90.0,
+                ambient_temp=25.0,
+                engine_rpm=1_200.0,
+                engine_load=0.1,
+            )
+            processor.process_frame(frame)
+
+        outlier = _good_frame(
+            timestamp="2025-07-04T14:23:10.000Z",
+            coolant_temp=140.0,
+            ambient_temp=25.0,
+            engine_rpm=1_200.0,
+            engine_load=0.1,
+        )
+        alert = processor.process_frame(outlier)
+
+        assert alert.failure_type == "STATISTICAL_ANOMALY"
+        assert alert.is_anomaly is True
+        assert alert.primary_pid == 0x05
+        assert alert.window_summary["coolant_temp"]["z_score"] > 3.0
+
+    def test_rate_guard_failure_returns_sensor_error(self, monkeypatch):
+        """A failed thermal guard must fail closed instead of silently passing."""
+        processor = PdMProcessor(vin_hashed=_BASE_VIN)
+        processor.process_frame(
+            _good_frame(
+                timestamp="2025-07-04T14:22:05.000Z",
+                engine_rpm=1_200.0,
+                engine_load=5.0,
+            )
+        )
+
+        def raise_value_error(*_args):
+            raise ValueError("invalid elapsed")
+
+        monkeypatch.setattr(
+            processor.hdf_detector,
+            "detect_thermal_rate_anomaly",
+            raise_value_error,
+        )
+
+        alert = processor.process_frame(
+            _good_frame(
+                timestamp="2025-07-04T14:22:06.000Z",
+                coolant_temp=91.0,
+                engine_rpm=1_200.0,
+                engine_load=5.0,
+            )
+        )
+
+        assert alert.failure_type == "SENSOR_ERROR"
+        assert alert.primary_pid == 0x05
+
+    def test_sensor_error_frame_does_not_pollute_window(self):
+        """Thermal sensor-error frames must not enter rolling statistics."""
+        processor = PdMProcessor(vin_hashed=_BASE_VIN)
+        processor.process_frame(
+            _good_frame(
+                timestamp="2025-07-04T14:22:05.000Z",
+                coolant_temp=85.0,
+                engine_rpm=1_200.0,
+                engine_load=5.0,
+            )
+        )
+        alert = processor.process_frame(
+            _good_frame(
+                timestamp="2025-07-04T14:22:06.000Z",
+                coolant_temp=135.0,
+                engine_rpm=1_200.0,
+                engine_load=5.0,
+            )
+        )
+
+        assert alert.failure_type == "SENSOR_ERROR"
+        assert processor.coolant_buffer.to_list() == [85.0]
 
     def test_engine_off_frame_produces_none_alert(self):
         """

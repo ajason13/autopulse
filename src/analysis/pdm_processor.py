@@ -14,14 +14,28 @@ from src.analysis.utils import (
     compute_iqr_bounds,
     compute_z_score,
     PROB_ANOMALY_LO,
+    PROB_ANOMALY_HI,
     VehicleClass,
 )
 
-FailureType = Literal["HDF", "OSF", "OSF_ANOMALY", "NONE", "SENSOR_ERROR"]
+FailureType = Literal[
+    "HDF",
+    "OSF",
+    "OSF_ANOMALY",
+    "STATISTICAL_ANOMALY",
+    "NONE",
+    "SENSOR_ERROR",
+]
 WindowStatValue = float | bool
 WindowSummary = dict[str, dict[str, WindowStatValue]]
 
 _VIN_HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_STATISTICAL_Z_THRESHOLD = 3.0
+_PID_BY_SUMMARY_KEY = {
+    "engine_rpm": 0x0C,
+    "coolant_temp": 0x05,
+    "engine_load": 0x04,
+}
 
 
 @dataclass
@@ -93,18 +107,13 @@ class PdMProcessor:
         rpm = float(frame["engine_rpm"])
         load = float(frame["engine_load"])
         coolant = float(frame["coolant_temp"])
-        ambient = float(frame["ambient_temp"])
-        delta_t = coolant - ambient
+        ambient = frame.get("ambient_temp")
+        delta_t = coolant - float(ambient) if ambient is not None else None
 
         # Temporal delta
         elapsed = 1.0  # Default to 1Hz
         if self.last_timestamp is not None:
             elapsed = max(0.001, curr_time - self.last_timestamp)
-
-        # Step 2: Update temporal state
-        self.rpm_buffer.push(rpm)
-        self.coolant_buffer.push(coolant)
-        self.load_buffer.push(load)
 
         # Rate guard
         if self.last_coolant_temp is not None:
@@ -122,11 +131,30 @@ class PdMProcessor:
                         obd_frame=frame
                     )
             except ValueError:
-                pass
+                return PdMAlert(
+                    timestamp=timestamp_ms,
+                    vin_hashed=self.vin_hashed,
+                    failure_probability=0.0,
+                    failure_type="SENSOR_ERROR",
+                    is_anomaly=False,
+                    primary_pid=0x05,
+                    obd_frame=frame
+                )
+
+        # Step 2: Update temporal state only after sensor guards pass.
+        self.rpm_buffer.push(rpm)
+        self.coolant_buffer.push(coolant)
+        self.load_buffer.push(load)
+        summary = self._generate_summary()
+        stat_anomaly, stat_pid = self._evaluate_statistical_anomaly(summary)
 
         # Step 3 & 4: Evaluate branches.
         # OSF includes the current frame's stress increment.
-        p_hdf = self.hdf_detector.compute_probability(delta_t, rpm)
+        p_hdf = (
+            self.hdf_detector.compute_probability(delta_t, rpm)
+            if delta_t is not None
+            else 0.0
+        )
         stress_inc = self.osf_detector.compute_stress_increment(load, rpm, elapsed)
         self.osf_detector.update_stress_index(stress_inc)
         p_osf = self.osf_detector.compute_probability()
@@ -143,8 +171,9 @@ class PdMProcessor:
             primary_prob = p_osf
             failure_type = osf_type
 
-        # Generate window summary
-        summary = self._generate_summary()
+        if stat_anomaly and primary_prob < PROB_ANOMALY_HI:
+            primary_prob = PROB_ANOMALY_HI
+            failure_type = "STATISTICAL_ANOMALY"
 
         # Update last state
         self.last_timestamp = curr_time
@@ -156,6 +185,7 @@ class PdMProcessor:
             failure_probability=primary_prob,
             failure_type=failure_type if primary_prob > PROB_ANOMALY_LO else "NONE",
             is_anomaly=primary_prob > PROB_ANOMALY_LO,
+            primary_pid=stat_pid if failure_type == "STATISTICAL_ANOMALY" else None,
             window_summary=summary,
             obd_frame=frame
         )
@@ -168,8 +198,6 @@ class PdMProcessor:
             return 0x04
         if "coolant_temp" not in frame:
             return 0x05
-        if "ambient_temp" not in frame:
-            return 0x46
         return None
 
     def _parse_timestamp(self, ts: Any) -> int:
@@ -212,6 +240,18 @@ class PdMProcessor:
                 "is_statistical_outlier": data[-1] < iqr_low or data[-1] > iqr_high,
             }
         return res
+
+    def _evaluate_statistical_anomaly(
+        self,
+        summary: WindowSummary,
+    ) -> tuple[bool, int | None]:
+        """Return whether any PID breaches Z-score or IQR anomaly gates."""
+        for name, stats in summary.items():
+            z_score = float(stats.get("z_score", 0.0))
+            iqr_outlier = bool(stats.get("is_statistical_outlier", False))
+            if abs(z_score) > _STATISTICAL_Z_THRESHOLD or iqr_outlier:
+                return True, _PID_BY_SUMMARY_KEY.get(name)
+        return False, None
 
 
 def _validate_vin_hash(vin_hashed: str) -> None:
