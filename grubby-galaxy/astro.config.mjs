@@ -24,7 +24,10 @@ export default defineConfig({
 				},
 				{
 					label: 'Reference',
-					items: [{ autogenerate: { directory: 'reference' } }],
+					items: [
+						{ label: 'Anomaly Detection', slug: 'reference/anomaly-detection' },
+						{ label: 'Empirical Validation', slug: 'reference/empirical-validation' },
+					],
 				},
 			],
 		}),
