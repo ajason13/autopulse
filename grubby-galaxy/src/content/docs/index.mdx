@@ -1,51 +1,63 @@
 ---
-title: AutoPulse Documentation
-description: Technical documentation for AutoPulse data contracts, replay harnesses, validation evidence, and developer workflows.
+title: AutoPulse
+description: Educational, read-only OBD-II anomaly detection framework using statistical drift.
+template: splash
+hero:
+  tagline: Predictive vehicle maintenance using statistical drift detection. Read-only. Educational. Secure.
+  image:
+    file: ../../assets/houston.webp
+  actions:
+    - text: Explore Specifications
+      link: /specs/us-001-engine-data-contract/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/ajason13.github.io/autopulse
+      icon: external
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-# AutoPulse Documentation
+## The AutoPulse Mission
 
-AutoPulse is a read-only OBD-II anomaly detection framework. These docs publish the current technical source of truth for ingestion contracts, replay simulation, validation evidence, and local development workflows.
+AutoPulse is an educational framework designed to detect statistical anomalies in vehicle telemetry before they trigger a Diagnostic Trouble Code (DTC). We focus on high-fidelity, read-only data analysis.
 
-## Specs
+<CardGrid stagger>
+	<Card title="Read-Only & Secure" icon="approve-check">
+		Strictly analytical interaction. We prioritize system integrity with zero ECU write commands and mandatory VIN hashing.
+	</Card>
+	<Card title="Statistical PdM" icon="random">
+		Identify **Heat Dissipation (HDF)** and **Overstrain (OSF)** failures using real-world AI4I 2020 dataset patterns.
+	</Card>
+	<Card title="Temporal Precision" icon="list-format">
+		Deterministic 60-second sliding windows with Z-score and IQR analysis optimized for edge deployment.
+	</Card>
+	<Card title="Multi-Agent Governance" icon="document">
+		Built using an agentic SDLC (Gemini/Claude/Codex) ensuring architecture, audit, and implementation alignment.
+	</Card>
+</CardGrid>
+
+## Documentation Roadmap
 
 <CardGrid>
 	<LinkCard
-		title="US-001: Engine Data Contract"
-		description="Strict sensor-frame schema, core read-only PIDs, security red lines, and research-backed detection claims."
+		title="US-001: Data Contract"
+		description="Engine sensor schemas and security red lines."
 		href="/specs/us-001-engine-data-contract/"
 	/>
 	<LinkCard
-		title="US-002: Virtual Replay Harness"
-		description="Dataset mapping, mock adapter design, replay synchronization modes, and dirty replay resilience strategy."
+		title="US-002: Replay Harness"
+		description="Simulate real-world failures with virtual logs."
 		href="/specs/us-002-virtual-replay-harness/"
 	/>
-</CardGrid>
-
-## Reference
-
-<CardGrid>
 	<LinkCard
-		title="Anomaly Detection"
-		description="US-003 HDF, OSF, statistical anomaly gates, rolling-window summaries, and alert outputs."
+		title="US-003: PdM Algorithms"
+		description="Deep dive into HDF, OSF, and sigmoid models."
 		href="/reference/anomaly-detection/"
 	/>
 	<LinkCard
-		title="Empirical Validation"
-		description="Validation notes and research evidence used by the AutoPulse technical specifications."
-		href="/reference/empirical-validation/"
+		title="Developer Setup"
+		description="Run the framework locally on your machine."
+		href="/guides/example/"
 	/>
-</CardGrid>
-
-## Developer Entry Points
-
-<CardGrid>
-	<Card title="Run Locally" icon="setting">
-		Start from `grubby-galaxy/README.md` for Node, `nvm`, build, preview, and local dev-server commands.
-	</Card>
-	<Card title="Contribute Docs" icon="pencil">
-		Add new Markdown or MDX pages under `src/content/docs/` and wire them into the Starlight sidebar when needed.
-	</Card>
 </CardGrid>

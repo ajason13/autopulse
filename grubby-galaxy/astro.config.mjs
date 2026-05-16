@@ -14,7 +14,7 @@ export default defineConfig({
 				{
 					label: 'Guides',
 					items: [
-						// Each item here is one entry in the navigation menu.
+						{ label: 'Getting Started', slug: 'guides/getting-started' },
 						{ label: 'Example Guide', slug: 'guides/example' },
 					],
 				},
@@ -25,6 +25,7 @@ export default defineConfig({
 				{
 					label: 'Reference',
 					items: [
+						{ label: 'Architecture Overview', slug: 'reference/architecture' },
 						{ label: 'Anomaly Detection', slug: 'reference/anomaly-detection' },
 						{ label: 'Empirical Validation', slug: 'reference/empirical-validation' },
 					],
