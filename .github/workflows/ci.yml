@@ -39,6 +39,11 @@ jobs:
         run: |
           python -m py_compile \
             src/data/validator.py \
+            src/analysis/circular_buffer.py \
+            src/analysis/hdf_detector.py \
+            src/analysis/osf_detector.py \
+            src/analysis/pdm_processor.py \
+            src/analysis/utils.py \
             src/simulation/virtual_replay.py \
             src/simulation/__init__.py \
             src/adapters.py \
@@ -51,3 +56,6 @@ jobs:
 
       - name: Run US-002 tests
         run: python -m pytest tests/test_us002_virtual_replay_harness.py -q
+
+      - name: Run US-003 tests
+        run: python -m pytest tests/test_us003_pdm_algorithms.py -q
