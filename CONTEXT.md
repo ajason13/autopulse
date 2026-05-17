@@ -3,7 +3,7 @@
 ## Current Epic
 **Epic 3: Documentation & Developer Experience**
 *   **Status:** Building
-*   **Active Story:** Setup and polishing of Starlight documentation site.
+*   **Active Story:** **US-005 (Alerting Engine)** - Final Audit Phase.
 
 ## Project Vitals
 *   **Mission:** Detect statistical drift in read-only OBD-II telemetry before DTCs appear.
@@ -18,6 +18,10 @@
     *   Statistical monitoring (Z-score/IQR) integrated into window summaries.
     *   Technically reviewed by Codex and adversarial sign-off provided by Claude.
     *   101/101 tests passing.
+*   **US-005 (Alerting Engine):** 🏗️ **IN AUDIT**.
+    *   Implemented JSON-LD serialization in `src/autopulse/alert_exporter.py`.
+    *   Security red lines (VIN hashing, RFC 8259 finite numbers) enforced.
+    *   Verified against 81/81 adversarial tests by Codex.
 
 ## Active Constraints
 *   **Read-Only Only:** Any write-access logic is a P0 security violation.
