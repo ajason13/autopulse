@@ -59,15 +59,17 @@ Required outputs:
 
 ## Handshake Protocol
 
-Codex is strictly forbidden from committing code to `main` unless all of the following are true:
+The transition from research/QA to implementation is automated via the Gemini CLI to eliminate "clipboard lag."
 
-1. The Lead Auditor has generated or approved the relevant adversarial test suite.
-2. Codex has run the full auditor-generated test suite using Code Interpreter.
-3. The test run reports 100% pass rate.
-4. Codex has recorded the verification command and result in the implementation summary.
-5. Any failing test has been fixed by implementation changes or explicitly escalated back to the Lead Architect and Lead Auditor.
+1. **Automated Handoff:** Gemini CLI packages the Lead Auditor's test suite and the Lead Architect's research into a structured prompt.
+2. **Direct Execution:** Gemini CLI triggers Codex implementation using `codex exec "[PROMPT]"`.
+3. **Verification:** 
+    - Codex runs the full auditor-generated test suite.
+    - The test run must report a 100% pass rate.
+    - Codex records the verification command and result in the implementation summary.
+4. **Final Sign-off:** Any failing test must be fixed or escalated back to the Lead Architect and Lead Auditor.
 
-No exception is allowed for convenience, deadline pressure, or partial local confidence. If the auditor test suite cannot be executed, Codex must not commit to `main`.
+No exception is allowed for convenience or partial local confidence. If the auditor test suite cannot be executed via `codex exec` or fails, Codex must not commit to `main`.
 
 ## Operating Rules
 

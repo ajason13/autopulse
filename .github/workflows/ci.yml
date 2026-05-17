@@ -59,3 +59,6 @@ jobs:
 
       - name: Run US-003 tests
         run: python -m pytest tests/test_us003_pdm_algorithms.py -q
+
+      - name: Run US-005 tests
+        run: python -m pytest tests/test_us005_alert_exporter.py -q
