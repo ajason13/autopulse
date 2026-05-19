@@ -49,7 +49,9 @@ jobs:
             src/adapters.py \
             src/providers.py \
             src/noise.py \
-            src/replayer.py
+            src/replayer.py \
+            src/autopulse/__init__.py \
+            src/autopulse/alert_exporter.py
 
       - name: Run US-001 tests
         run: python -m pytest tests/test_engine_data_contract.py -q
