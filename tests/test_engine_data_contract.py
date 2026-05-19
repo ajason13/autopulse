@@ -19,7 +19,7 @@ import copy
 import pytest
 from jsonschema import ValidationError
 
-from src.data.validator import (
+from autopulse.data.validator import (
     RESTRICTED_SERVICE_IDS,
     SecurityViolationRedLine,
     command_filter,

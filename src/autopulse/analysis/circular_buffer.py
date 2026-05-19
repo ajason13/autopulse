@@ -61,7 +61,7 @@ class CircularBuffer:
             return None
 
         ewma = data[0]
-        for value in data:
+        for value in data[1:]:
             ewma = alpha * value + (1.0 - alpha) * ewma
         return ewma
 

@@ -96,9 +96,9 @@ Repository governance in this `AGENTS.md` takes precedence over any reusable ski
 
 ## Repository Ownership Map
 
-- `src/data/`: OBD-II ingestion, normalization, and validation logic.
-- `src/simulation/`: Virtual replay harness and deterministic scenario playback.
-- `src/analysis/`: Statistical anomaly scoring and drift detection.
+- `src/autopulse/data/`: OBD-II ingestion, normalization, and validation logic.
+- `tests/simulation/`: Virtual replay harness and deterministic scenario playback.
+- `src/autopulse/analysis/`: Statistical anomaly scoring and drift detection.
 - `schemas/`: JSON Schema data contracts.
 - `tests/`: Adversarial and regression test suites.
 - `docs/`: Architecture, standards, and design records.

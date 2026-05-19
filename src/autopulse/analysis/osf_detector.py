@@ -1,5 +1,5 @@
 import math
-from src.analysis.utils import (
+from autopulse.analysis.utils import (
     OSF_LIMITS,
     LUGGING_RPM_CEILING,
     LUGGING_LOAD_FLOOR,

@@ -32,7 +32,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from jsonschema import ValidationError as JsonSchemaValidationError
 
-from src.simulation import (
+from tests.simulation import (
     CandidParser as ProdCandidParser,
     DataPacket as ProdDataPacket,
     JSONLProvider as ProdJSONLProvider,

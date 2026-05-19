@@ -40,11 +40,11 @@ import pytest
 # ──────────────────────────────────────────────────────────────────────────────
 # PRODUCTION IMPORTS
 # ──────────────────────────────────────────────────────────────────────────────
-from src.analysis.pdm_processor import PdMProcessor, PdMAlert
-from src.analysis.hdf_detector import HDFDetector
-from src.analysis.osf_detector import OSFDetector
-from src.analysis.circular_buffer import CircularBuffer
-from src.analysis.utils import (
+from autopulse.analysis.pdm_processor import PdMProcessor, PdMAlert
+from autopulse.analysis.hdf_detector import HDFDetector
+from autopulse.analysis.osf_detector import OSFDetector
+from autopulse.analysis.circular_buffer import CircularBuffer
+from autopulse.analysis.utils import (
     VehicleClass,
     OSF_LIMITS,
     HDF_DELTA_T_THRESHOLD_K,
@@ -920,7 +920,7 @@ class TestAlgorithmicExecutionSequence:
     End-to-end walkthrough of the five-step processing sequence defined
     in US-003 §Logic Flowchart and Algorithmic Execution Sequence.
     Uses the inline reference implementations as stand-ins for the real
-    PdMProcessor until src/analysis/ is implemented.
+    PdMProcessor until src/autopulse/analysis/ is implemented.
     """
 
     def _process_frame(self, frame: dict, vehicle_class: VehicleClass = "L") -> PdMAlert:

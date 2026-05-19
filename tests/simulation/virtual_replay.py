@@ -18,7 +18,7 @@ from typing import Any, Iterable, Mapping, Optional, Protocol
 
 from jsonschema import ValidationError
 
-from src.data.validator import command_filter, validate_frame
+from autopulse.data.validator import command_filter, validate_frame
 
 
 US001_REQUIRED_FIELDS = frozenset(
