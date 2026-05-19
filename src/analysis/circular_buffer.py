@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import statistics
 
 
 @dataclass
@@ -34,6 +35,35 @@ class CircularBuffer:
             return list(self._data)
         tail = self._head % self.capacity
         return self._data[tail:] + self._data[:tail]
+
+    def get_median(self, n: int) -> float | None:
+        """Return the median of the last up to n elements."""
+        if n <= 0:
+            raise ValueError("n must be positive.")
+
+        data = self.to_list()
+        if not data:
+            return None
+        return float(statistics.median(data[-n:]))
+
+    def get_ewma(self, alpha: float) -> float | None:
+        """
+        Return the exponentially weighted moving average over current contents.
+
+        The oldest value seeds the accumulator, matching the US-004 smoothing
+        definition for a deterministic windowed stream.
+        """
+        if not 0.0 < alpha <= 1.0:
+            raise ValueError("alpha must be in the range (0.0, 1.0].")
+
+        data = self.to_list()
+        if not data:
+            return None
+
+        ewma = data[0]
+        for value in data:
+            ewma = alpha * value + (1.0 - alpha) * ewma
+        return ewma
 
     @property
     def is_full(self) -> bool:

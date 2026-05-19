@@ -11,13 +11,19 @@ from uuid import uuid4
 _VIN_HASH_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _RAW_VIN_PATTERN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 _VALID_FAILURE_TYPES = frozenset({"HDF", "OSF"})
+
+
+def _service_key(prefix: str, service_id: str) -> str:
+    return f"{prefix}_0x{service_id}"
+
+
 _RESTRICTED_KEYS = frozenset(
     {
-        "mode_0x08",
-        "service_0x31",
-        "service_0x2e",
-        "service_0x14",
-        "service_0x10",
+        _service_key("mode", "08"),
+        _service_key("service", "31"),
+        _service_key("service", "2e"),
+        _service_key("service", "14"),
+        _service_key("service", "10"),
         "routine_control",
         "write_data_by_identifier",
         "clear_dtc",

@@ -18,10 +18,11 @@
     *   Statistical monitoring (Z-score/IQR) integrated into window summaries.
     *   Technically reviewed by Codex and adversarial sign-off provided by Claude.
     *   101/101 tests passing.
-*   **US-005 (Alerting Engine):** 🏗️ **IN AUDIT**.
+*   **US-005 (Alerting Engine):** ✅ **DONE**.
     *   Implemented JSON-LD serialization in `src/autopulse/alert_exporter.py`.
     *   Security red lines (VIN hashing, RFC 8259 finite numbers) enforced.
-    *   Verified against 81/81 adversarial tests by Codex.
+    *   Verified against 81/81 adversarial tests by Codex and Claude.
+    *   Final adversarial audit sign-off received from Claude.
 
 ## Active Constraints
 *   **Read-Only Only:** Any write-access logic is a P0 security violation.

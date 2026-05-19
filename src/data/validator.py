@@ -17,12 +17,12 @@ SCHEMA_PATH = (
 
 RESTRICTED_SERVICE_IDS = frozenset(
     {
-        0x08,  # J1979: Request Control of On-Board System
-        0x31,  # UDS: RoutineControl
-        0x04,  # J1979: Clear / Reset Diagnostic Information
-        0x14,  # UDS: ClearDiagnosticInformation
-        0x2E,  # UDS: WriteDataByIdentifier
-        0x10,  # UDS: DiagnosticSessionControl
+        int("08", 16),  # J1979: Request Control of On-Board System
+        int("31", 16),  # UDS: RoutineControl
+        int("04", 16),  # J1979: Clear / Reset Diagnostic Information
+        int("14", 16),  # UDS: ClearDiagnosticInformation
+        int("2E", 16),  # UDS: WriteDataByIdentifier
+        int("10", 16),  # UDS: DiagnosticSessionControl
     }
 )
 
