@@ -11,9 +11,9 @@ An educational, read-only OBD-II anomaly detection framework that learns a vehic
 
 ## Repository Layout
 
-- `src/data/`: OBD-II ingestion and validation.
-- `src/simulation/`: Virtual replay harness.
-- `src/analysis/`: Statistical anomaly scoring.
+- `src/autopulse/data/`: OBD-II ingestion and validation.
+- `tests/simulation/`: Virtual replay harness.
+- `src/autopulse/analysis/`: Statistical anomaly scoring.
 - `schemas/`: JSON data contracts.
 - `tests/`: Adversarial test suites.
 - `docs/`: Technical design documents.

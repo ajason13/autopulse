@@ -38,18 +38,18 @@ jobs:
       - name: Syntax check
         run: |
           python -m py_compile \
-            src/data/validator.py \
-            src/analysis/circular_buffer.py \
-            src/analysis/hdf_detector.py \
-            src/analysis/osf_detector.py \
-            src/analysis/pdm_processor.py \
-            src/analysis/utils.py \
-            src/simulation/virtual_replay.py \
-            src/simulation/__init__.py \
-            src/adapters.py \
-            src/providers.py \
-            src/noise.py \
-            src/replayer.py \
+            src/autopulse/data/validator.py \
+            src/autopulse/analysis/circular_buffer.py \
+            src/autopulse/analysis/hdf_detector.py \
+            src/autopulse/analysis/osf_detector.py \
+            src/autopulse/analysis/pdm_processor.py \
+            src/autopulse/analysis/utils.py \
+            tests/simulation/virtual_replay.py \
+            tests/simulation/__init__.py \
+            src/autopulse/adapters.py \
+            src/autopulse/providers.py \
+            src/autopulse/noise.py \
+            src/autopulse/replayer.py \
             src/autopulse/__init__.py \
             src/autopulse/alert_exporter.py
 
@@ -61,6 +61,9 @@ jobs:
 
       - name: Run US-003 tests
         run: python -m pytest tests/test_us003_pdm_algorithms.py -q
+
+      - name: Run US-004 tests
+        run: python -m pytest tests/test_us004_smoothing.py -q
 
       - name: Run US-005 tests
         run: python -m pytest tests/test_us005_alert_exporter.py -q

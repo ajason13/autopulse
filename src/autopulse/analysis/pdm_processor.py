@@ -7,10 +7,10 @@ import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from src.analysis.circular_buffer import CircularBuffer
-from src.analysis.hdf_detector import HDFDetector
-from src.analysis.osf_detector import OSFDetector
-from src.analysis.utils import (
+from autopulse.analysis.circular_buffer import CircularBuffer
+from autopulse.analysis.hdf_detector import HDFDetector
+from autopulse.analysis.osf_detector import OSFDetector
+from autopulse.analysis.utils import (
     compute_iqr_bounds,
     compute_z_score,
     PROB_ANOMALY_LO,
@@ -154,7 +154,19 @@ class PdMProcessor:
         self.rpm_buffer.push(rpm)
         self.coolant_buffer.push(coolant)
         self.load_buffer.push(load)
-        smoothed_rpm, smoothed_coolant, smoothed_load = self._smooth_current_values()
+        try:
+            smoothed_rpm, smoothed_coolant, smoothed_load = (
+                self._smooth_current_values()
+            )
+        except (RuntimeError, ValueError, TypeError, OverflowError):
+            return PdMAlert(
+                timestamp=timestamp_ms,
+                vin_hashed=self.vin_hashed,
+                failure_probability=0.0,
+                failure_type="SENSOR_ERROR",
+                is_anomaly=False,
+                obd_frame=frame
+            )
         summary = self._generate_summary()
         stat_anomaly, stat_pid = self._evaluate_statistical_anomaly(summary)
 
@@ -186,7 +198,7 @@ class PdMProcessor:
             primary_prob = p_osf
             failure_type = osf_type
 
-        if stat_anomaly and primary_prob < PROB_ANOMALY_HI:
+        if stat_anomaly and primary_prob <= PROB_ANOMALY_LO:
             primary_prob = PROB_ANOMALY_HI
             failure_type = "STATISTICAL_ANOMALY"
 

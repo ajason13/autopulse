@@ -29,8 +29,13 @@ Tests are grouped into four threat categories:
 
 import math
 import statistics
+import inspect
 import pytest
 import random
+
+from autopulse.analysis.circular_buffer import CircularBuffer
+from autopulse.analysis.pdm_processor import PdMProcessor
+from autopulse.analysis.utils import PROB_ANOMALY_HI, PROB_ANOMALY_LO
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Reference implementations
@@ -680,3 +685,112 @@ class TestDeterminismAndReproducibility:
         out = hybrid_smooth([1500.0, 1600.0], alpha=RPM_ALPHA)
         assert len(out) == 2
         assert all(RPM_MIN <= v <= RPM_MAX for v in out)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Category G — Audit Remediation Regression Tests
+# Direct coverage for US-004 audit findings A, B, and C.
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TestAuditRemediationRegressions:
+
+    def test_t_g1_ewma_iteration_starts_after_seed(self):
+        """Finding A: EWMA must seed from oldest value and iterate from index 1."""
+        source = inspect.getsource(CircularBuffer.get_ewma)
+        assert "for value in data[1:]:" in source
+        assert "for value in data:" not in source
+
+    def test_t_g2_statistical_anomaly_does_not_override_primary_anomaly(self, monkeypatch):
+        """Finding B: STATISTICAL_ANOMALY must not mask an active HDF/OSF alert."""
+        processor = PdMProcessor("a" * 64)
+        monkeypatch.setattr(
+            processor,
+            "_smooth_current_values",
+            lambda: (900.0, 75.0, 10.0),
+        )
+        monkeypatch.setattr(
+            processor,
+            "_evaluate_statistical_anomaly",
+            lambda summary: (True, 0x0C),
+        )
+        monkeypatch.setattr(
+            processor.hdf_detector,
+            "compute_probability",
+            lambda delta_t, rpm: PROB_ANOMALY_LO + 0.1,
+        )
+        monkeypatch.setattr(
+            processor.osf_detector,
+            "compute_probability",
+            lambda: 0.0,
+        )
+
+        alert = processor.process_frame(_processor_frame())
+
+        assert alert.failure_type == "HDF"
+        assert alert.failure_probability == PROB_ANOMALY_LO + 0.1
+        assert alert.primary_pid is None
+
+    def test_t_g3_statistical_anomaly_fires_when_primary_probability_is_not_anomaly(
+        self,
+        monkeypatch,
+    ):
+        """Finding B: STATISTICAL_ANOMALY may fire only at or below anomaly floor."""
+        processor = PdMProcessor("a" * 64)
+        monkeypatch.setattr(
+            processor,
+            "_smooth_current_values",
+            lambda: (900.0, 75.0, 10.0),
+        )
+        monkeypatch.setattr(
+            processor,
+            "_evaluate_statistical_anomaly",
+            lambda summary: (True, 0x0C),
+        )
+        monkeypatch.setattr(
+            processor.hdf_detector,
+            "compute_probability",
+            lambda delta_t, rpm: PROB_ANOMALY_LO,
+        )
+        monkeypatch.setattr(
+            processor.osf_detector,
+            "compute_probability",
+            lambda: 0.0,
+        )
+
+        alert = processor.process_frame(_processor_frame())
+
+        assert alert.failure_type == "STATISTICAL_ANOMALY"
+        assert alert.failure_probability == PROB_ANOMALY_HI
+        assert alert.primary_pid == 0x0C
+
+    def test_t_g4_smoothing_failure_returns_sensor_error(self, monkeypatch):
+        """Finding C: smoothing exceptions must become SENSOR_ERROR alerts."""
+        processor = PdMProcessor("a" * 64)
+
+        def fail_smoothing():
+            raise ValueError("invalid smoothing state")
+
+        monkeypatch.setattr(processor, "_smooth_current_values", fail_smoothing)
+
+        alert = processor.process_frame(_processor_frame())
+
+        assert alert.failure_type == "SENSOR_ERROR"
+        assert alert.failure_probability == 0.0
+        assert alert.is_anomaly is False
+
+
+def _processor_frame(**overrides) -> dict:
+    frame = {
+        "timestamp": "2025-07-04T14:22:05.123Z",
+        "vin_hashed": "a" * 64,
+        "protocol": "SAE_J1979",
+        "engine_rpm": 900.0,
+        "vehicle_speed": 0,
+        "coolant_temp": 90.0,
+        "engine_load": 20.0,
+        "stft_bank1": 0.0,
+        "ltft_bank1": 0.0,
+        "ambient_temp": 25.0,
+    }
+    frame.update(overrides)
+    return frame

@@ -5,7 +5,7 @@ description: Strict read-only OBD-II sensor frame contract for AutoPulse engine 
 
 US-001 defines the canonical engine telemetry frame consumed by AutoPulse ingestion, replay, anomaly scoring, and reporting. It is intentionally narrow: every accepted frame must carry the six core read-only engine PIDs plus timestamp, hashed VIN, and protocol identity. Optional read-only enrichment fields are explicitly enumerated so `additionalProperties: false` remains enforceable.
 
-The contract is enforced in `schemas/engine_obd_frame.schema.json` and loaded by `src/data/validator.py`.
+The contract is enforced in `schemas/engine_obd_frame.schema.json` and loaded by `src/autopulse/data/validator.py`.
 
 ## Scope
 

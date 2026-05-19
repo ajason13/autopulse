@@ -1,4 +1,4 @@
-from src.analysis.utils import (
+from autopulse.analysis.utils import (
     HDF_DELTA_T_THRESHOLD_K,
     HDF_RPM_THRESHOLD,
     PROB_CRITICAL,

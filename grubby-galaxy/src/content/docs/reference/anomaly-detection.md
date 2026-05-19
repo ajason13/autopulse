@@ -3,7 +3,7 @@ title: Anomaly Detection Reference
 description: Technical reference for the US-003 predictive maintenance algorithms, alert outputs, and rolling-window statistics.
 ---
 
-US-003 implements AutoPulse's predictive maintenance analysis layer under `src/analysis/`. The processor consumes validated US-001 engine frames, maintains rolling temporal state, and emits `PdMAlert` objects for downstream UI, reporting, and audit workflows.
+US-003 implements AutoPulse's predictive maintenance analysis layer under `src/autopulse/analysis/`. The processor consumes validated US-001 engine frames, maintains rolling temporal state, and emits `PdMAlert` objects for downstream UI, reporting, and audit workflows.
 
 The implementation is intentionally computational only. It does not open CAN, serial, socket, or OBD connections, and it does not issue diagnostic commands. All vehicle interaction remains read-only.
 
@@ -11,12 +11,12 @@ The implementation is intentionally computational only. It does not open CAN, se
 
 | Component | File | Responsibility |
 | --- | --- | --- |
-| `PdMProcessor` | `src/analysis/pdm_processor.py` | Orchestrates frame validation, rolling buffers, detector evaluation, and alert selection. |
-| `PdMAlert` | `src/analysis/pdm_processor.py` | Public alert payload for anomaly status, probability, primary PID, rolling-window summary, and source frame. |
-| `HDFDetector` | `src/analysis/hdf_detector.py` | Heat Dissipation Failure probability and thermal rate guard. |
-| `OSFDetector` | `src/analysis/osf_detector.py` | Overstrain Failure stress accumulation, classification, and probability. |
-| `CircularBuffer` | `src/analysis/circular_buffer.py` | Fixed-size rolling storage for the 60-second analysis window. |
-| Statistical helpers | `src/analysis/utils.py` | Shared constants, sigmoid, Z-score, and IQR bounds. |
+| `PdMProcessor` | `src/autopulse/analysis/pdm_processor.py` | Orchestrates frame validation, rolling buffers, detector evaluation, and alert selection. |
+| `PdMAlert` | `src/autopulse/analysis/pdm_processor.py` | Public alert payload for anomaly status, probability, primary PID, rolling-window summary, and source frame. |
+| `HDFDetector` | `src/autopulse/analysis/hdf_detector.py` | Heat Dissipation Failure probability and thermal rate guard. |
+| `OSFDetector` | `src/autopulse/analysis/osf_detector.py` | Overstrain Failure stress accumulation, classification, and probability. |
+| `CircularBuffer` | `src/autopulse/analysis/circular_buffer.py` | Fixed-size rolling storage for the 60-second analysis window. |
+| Statistical helpers | `src/autopulse/analysis/utils.py` | Shared constants, sigmoid, Z-score, and IQR bounds. |
 
 ## Alert Contract
 

@@ -10,7 +10,7 @@ from jsonschema import Draft7Validator, FormatChecker
 
 
 SCHEMA_PATH = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
     / "schemas"
     / "engine_obd_frame.schema.json"
 )
