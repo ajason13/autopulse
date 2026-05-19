@@ -252,11 +252,18 @@ class CSVProvider(LogProvider):
 class CandidParser:
     """Decode simple CANdid-style OBD-II PID rows into normalized fields.
 
-    Fuel-trim PIDs 0x06 and 0x07 use the OBD-II formula
+    Fuel-trim PIDs 06 and 07 use the OBD-II formula
     ``(A / 128 - 1) * 100``. Raw byte extremes can decode outside the
     AutoPulse US-001 ``[-50, 50]`` physical contract; those frames are left
     unclamped so the schema gate rejects them as dirty replay input.
     """
+
+    _PID_ENGINE_LOAD = int("04", 16)
+    _PID_COOLANT_TEMP = int("05", 16)
+    _PID_STFT_BANK1 = int("06", 16)
+    _PID_LTFT_BANK1 = int("07", 16)
+    _PID_ENGINE_RPM = int("0C", 16)
+    _PID_VEHICLE_SPEED = int("0D", 16)
 
     def parse(self, row: dict[str, Any]) -> dict[str, Any]:
         parsed = dict(row)
@@ -264,17 +271,17 @@ class CandidParser:
         data = self._data_bytes(parsed)
         if pid is None:
             return parsed
-        if pid == 0x0C and len(data) >= 2:
+        if pid == self._PID_ENGINE_RPM and len(data) >= 2:
             parsed["engine_rpm"] = ((data[0] * 256) + data[1]) / 4.0
-        elif pid == 0x0D and data:
+        elif pid == self._PID_VEHICLE_SPEED and data:
             parsed["vehicle_speed"] = data[0]
-        elif pid == 0x05 and data:
+        elif pid == self._PID_COOLANT_TEMP and data:
             parsed["coolant_temp"] = float(data[0] - 40)
-        elif pid == 0x04 and data:
+        elif pid == self._PID_ENGINE_LOAD and data:
             parsed["engine_load"] = data[0] * 100.0 / 255.0
-        elif pid == 0x06 and data:
+        elif pid == self._PID_STFT_BANK1 and data:
             parsed["stft_bank1"] = data[0] * 100.0 / 128.0 - 100.0
-        elif pid == 0x07 and data:
+        elif pid == self._PID_LTFT_BANK1 and data:
             parsed["ltft_bank1"] = data[0] * 100.0 / 128.0 - 100.0
         return parsed
 

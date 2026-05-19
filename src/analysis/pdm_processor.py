@@ -31,11 +31,17 @@ WindowSummary = dict[str, dict[str, WindowStatValue]]
 
 _VIN_HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _STATISTICAL_Z_THRESHOLD = 3.0
+_PID_ENGINE_RPM = int("0C", 16)
+_PID_COOLANT_TEMP = int("05", 16)
+_PID_ENGINE_LOAD = int("04", 16)
 _PID_BY_SUMMARY_KEY = {
-    "engine_rpm": 0x0C,
-    "coolant_temp": 0x05,
-    "engine_load": 0x04,
+    "engine_rpm": _PID_ENGINE_RPM,
+    "coolant_temp": _PID_COOLANT_TEMP,
+    "engine_load": _PID_ENGINE_LOAD,
 }
+_RPM_LOAD_ALPHA = 0.3
+_COOLANT_ALPHA = 0.1
+_MEDIAN_WINDOW = 3
 
 
 @dataclass
@@ -76,6 +82,9 @@ class PdMProcessor:
         self.rpm_buffer = CircularBuffer(window_size)
         self.coolant_buffer = CircularBuffer(window_size)
         self.load_buffer = CircularBuffer(window_size)
+        self._rpm_median_buffer = CircularBuffer(window_size)
+        self._coolant_median_buffer = CircularBuffer(window_size)
+        self._load_median_buffer = CircularBuffer(window_size)
 
         self.hdf_detector = HDFDetector()
         self.osf_detector = OSFDetector(vehicle_class)
@@ -127,7 +136,7 @@ class PdMProcessor:
                         failure_probability=0.0,
                         failure_type="SENSOR_ERROR",
                         is_anomaly=False,
-                        primary_pid=0x05,
+                        primary_pid=_PID_COOLANT_TEMP,
                         obd_frame=frame
                     )
             except ValueError:
@@ -137,7 +146,7 @@ class PdMProcessor:
                     failure_probability=0.0,
                     failure_type="SENSOR_ERROR",
                     is_anomaly=False,
-                    primary_pid=0x05,
+                    primary_pid=_PID_COOLANT_TEMP,
                     obd_frame=frame
                 )
 
@@ -145,17 +154,23 @@ class PdMProcessor:
         self.rpm_buffer.push(rpm)
         self.coolant_buffer.push(coolant)
         self.load_buffer.push(load)
+        smoothed_rpm, smoothed_coolant, smoothed_load = self._smooth_current_values()
         summary = self._generate_summary()
         stat_anomaly, stat_pid = self._evaluate_statistical_anomaly(summary)
 
         # Step 3 & 4: Evaluate branches.
         # OSF includes the current frame's stress increment.
+        smoothed_delta_t = (
+            smoothed_coolant - float(ambient) if ambient is not None else None
+        )
         p_hdf = (
-            self.hdf_detector.compute_probability(delta_t, rpm)
-            if delta_t is not None
+            self.hdf_detector.compute_probability(smoothed_delta_t, smoothed_rpm)
+            if smoothed_delta_t is not None
             else 0.0
         )
-        stress_inc = self.osf_detector.compute_stress_increment(load, rpm, elapsed)
+        stress_inc = self.osf_detector.compute_stress_increment(
+            smoothed_load, smoothed_rpm, elapsed
+        )
         self.osf_detector.update_stress_index(stress_inc)
         p_osf = self.osf_detector.compute_probability()
 
@@ -193,11 +208,11 @@ class PdMProcessor:
     def _check_mandatory_pids(self, frame: dict[str, Any]) -> int | None:
         """Check if mandatory PIDs exist. Returns the first missing PID hex."""
         if "engine_rpm" not in frame:
-            return 0x0C
+            return _PID_ENGINE_RPM
         if "engine_load" not in frame:
-            return 0x04
+            return _PID_ENGINE_LOAD
         if "coolant_temp" not in frame:
-            return 0x05
+            return _PID_COOLANT_TEMP
         return None
 
     def _parse_timestamp(self, ts: Any) -> int:
@@ -240,6 +255,34 @@ class PdMProcessor:
                 "is_statistical_outlier": data[-1] < iqr_low or data[-1] > iqr_high,
             }
         return res
+
+    def _smooth_current_values(self) -> tuple[float, float, float]:
+        """
+        Apply US-004 Median(3) -> EWMA smoothing for PdM probability branches.
+
+        Raw buffers remain the source of truth for statistical anomaly gates.
+        """
+        rpm_median = self.rpm_buffer.get_median(_MEDIAN_WINDOW)
+        coolant_median = self.coolant_buffer.get_median(_MEDIAN_WINDOW)
+        load_median = self.load_buffer.get_median(_MEDIAN_WINDOW)
+        if rpm_median is None or coolant_median is None or load_median is None:
+            raise RuntimeError("raw buffers must contain current frame values.")
+
+        self._rpm_median_buffer.push(rpm_median)
+        self._coolant_median_buffer.push(coolant_median)
+        self._load_median_buffer.push(load_median)
+
+        smoothed_rpm = self._rpm_median_buffer.get_ewma(_RPM_LOAD_ALPHA)
+        smoothed_coolant = self._coolant_median_buffer.get_ewma(_COOLANT_ALPHA)
+        smoothed_load = self._load_median_buffer.get_ewma(_RPM_LOAD_ALPHA)
+        if (
+            smoothed_rpm is None
+            or smoothed_coolant is None
+            or smoothed_load is None
+        ):
+            raise RuntimeError("median buffers must contain current frame values.")
+
+        return smoothed_rpm, smoothed_coolant, smoothed_load
 
     def _evaluate_statistical_anomaly(
         self,
