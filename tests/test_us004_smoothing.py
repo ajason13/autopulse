@@ -29,7 +29,6 @@ Tests are grouped into four threat categories:
 
 import math
 import statistics
-import inspect
 import pytest
 import random
 
@@ -694,11 +693,17 @@ class TestDeterminismAndReproducibility:
 
 class TestAuditRemediationRegressions:
 
-    def test_t_g1_ewma_iteration_starts_after_seed(self):
+    def test_t_g1_ewma_seeding_is_correct_via_production_buffer(self):
         """Finding A: EWMA must seed from oldest value and iterate from index 1."""
-        source = inspect.getsource(CircularBuffer.get_ewma)
-        assert "for value in data[1:]:" in source
-        assert "for value in data:" not in source
+        alpha = 0.3
+        values = [100.0, 200.0, 300.0, 400.0, 500.0]
+        buf = CircularBuffer(capacity=10)
+        for v in values:
+            buf.push(v)
+        expected = values[0]
+        for v in values[1:]:
+            expected = alpha * v + (1 - alpha) * expected
+        assert math.isclose(buf.get_ewma(alpha), expected, rel_tol=1e-9)
 
     def test_t_g2_statistical_anomaly_does_not_override_primary_anomaly(self, monkeypatch):
         """Finding B: STATISTICAL_ANOMALY must not mask an active HDF/OSF alert."""
@@ -762,6 +767,30 @@ class TestAuditRemediationRegressions:
         assert alert.failure_type == "STATISTICAL_ANOMALY"
         assert alert.failure_probability == PROB_ANOMALY_HI
         assert alert.primary_pid == 0x0C
+
+    def test_t_g4_pdm_processor_smoothed_rpm_converges_via_production_buffer(
+        self,
+        monkeypatch,
+    ):
+        processor = PdMProcessor("a" * 64)
+        target_rpm = 2000.0
+        captured: list[float] = []
+        original_smooth = processor._smooth_current_values.__func__
+
+        def capturing_smooth(self_inner):
+            result = original_smooth(self_inner)
+            captured.append(result[0])
+            return result
+
+        monkeypatch.setattr(
+            processor,
+            "_smooth_current_values",
+            lambda: capturing_smooth(processor),
+        )
+        for _ in range(60):
+            processor.process_frame(_processor_frame(engine_rpm=target_rpm))
+        tolerance = target_rpm * 0.01
+        assert abs(captured[-1] - target_rpm) <= tolerance
 
     def test_t_g4_smoothing_failure_returns_sensor_error(self, monkeypatch):
         """Finding C: smoothing exceptions must become SENSOR_ERROR alerts."""
