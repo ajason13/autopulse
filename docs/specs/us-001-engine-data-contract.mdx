@@ -1,0 +1,178 @@
+---
+title: US-001 Engine Data Contract
+description: Strict read-only OBD-II sensor frame contract for AutoPulse engine telemetry ingestion.
+---
+
+US-001 defines the canonical engine telemetry frame consumed by AutoPulse ingestion, replay, anomaly scoring, and reporting. It is intentionally narrow: every accepted frame must carry the six core read-only engine PIDs plus timestamp, hashed VIN, and protocol identity. Optional read-only enrichment fields are explicitly enumerated so `additionalProperties: false` remains enforceable.
+
+The contract is enforced in `schemas/engine_obd_frame.schema.json` and loaded by `src/autopulse/data/validator.py`.
+
+## Scope
+
+US-001 accepts only passive diagnostic data from SAE J1979 Mode 01 or SAE J1979-2 read services. It does not define actuator control, ECU configuration, diagnostic reset, calibration writes, or programming session behavior.
+
+## Canonical JSON Schema
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AutoPulse Engine Data Frame (US-001)",
+  "description": "Strict schema for single sensor frames capturing core engine health PIDs.",
+  "type": "object",
+  "required": [
+    "timestamp",
+    "vin_hashed",
+    "protocol",
+    "engine_rpm",
+    "vehicle_speed",
+    "coolant_temp",
+    "engine_load",
+    "stft_bank1",
+    "ltft_bank1"
+  ],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "vin_hashed": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "SAE_J1979",
+        "SAE_J1979_2"
+      ]
+    },
+    "engine_rpm": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 9500.0
+    },
+    "vehicle_speed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "coolant_temp": {
+      "type": "number",
+      "minimum": -40.0,
+      "maximum": 140.0
+    },
+    "ambient_temp": {
+      "type": "number",
+      "minimum": -40.0,
+      "maximum": 80.0
+    },
+    "engine_load": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 100.0
+    },
+    "stft_bank1": {
+      "type": "number",
+      "minimum": -50.0,
+      "maximum": 50.0
+    },
+    "ltft_bank1": {
+      "type": "number",
+      "minimum": -50.0,
+      "maximum": 50.0
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+## Core Read-Only PIDs
+
+| PID | Field | Source standard | Formula or encoding | Accepted range |
+| --- | --- | --- | --- | --- |
+| `0x0C` | `engine_rpm` | SAE J1979 Mode 01 | `((A * 256) + B) / 4` rpm | `0.0` to `9500.0` |
+| `0x0D` | `vehicle_speed` | SAE J1979 Mode 01 | `A` km/h | `0` to `255` |
+| `0x05` | `coolant_temp` | SAE J1979 Mode 01 | `A - 40` deg C | `-40.0` to `140.0` |
+| `0x04` | `engine_load` | SAE J1979 Mode 01 | `A * 100 / 255` percent | `0.0` to `100.0` |
+| `0x06` | `stft_bank1` | SAE J1979 Mode 01 | `(A / 128 - 1) * 100` percent | `-50.0` to `50.0` |
+| `0x07` | `ltft_bank1` | SAE J1979 Mode 01 | `(A / 128 - 1) * 100` percent | `-50.0` to `50.0` |
+
+The schema limits are physical guardrails, not simply protocol maxima. For example, SAE J1979 can encode RPM above passenger-engine operating reality, but AutoPulse rejects values above `9500.0` rpm because they represent parser error, sensor fault, or dirty replay input for the supported vehicle class.
+
+## Optional Read-Only PIDs
+
+| PID | Field | Source standard | Formula or encoding | Accepted range |
+| --- | --- | --- | --- | --- |
+| `0x46` | `ambient_temp` | SAE J1979 Mode 01 | `A - 40` deg C | `-40.0` to `80.0` |
+
+`ambient_temp` is optional because US-001's core ingestion contract is limited to the six engine health PIDs. US-003 uses it when present to compute the HDF cooling delta. Frames without `ambient_temp` remain valid and can still be evaluated for OSF and statistical anomalies.
+
+## Security Red Lines
+
+AutoPulse is read-only by design. Any write-access or control-oriented diagnostic command is a P0 security violation and must be blocked before it can reach a CAN interface.
+
+The validator accepts read-only data paths:
+
+| Service | Policy |
+| --- | --- |
+| SAE J1979 Mode `0x01` current powertrain diagnostic data | Allowed |
+| UDS / SAE J1979-2 Service `0x22` ReadDataByIdentifier | Allowed |
+
+The command filter rejects the following restricted services:
+
+| Service ID | Protocol family | Reason for rejection |
+| --- | --- | --- |
+| `0x08` | SAE J1979 | Request Control of On-Board System can actuate vehicle systems. |
+| `0x31` | UDS | RoutineControl can start procedures such as EVAP routines or other active tests. |
+| `0x04` | SAE J1979 | Clear/reset diagnostic information erases DTCs and readiness state. |
+| `0x14` | UDS | ClearDiagnosticInformation resets diagnostic history. |
+| `0x2E` | UDS | WriteDataByIdentifier can change ECU data or calibration values. |
+| `0x10` | UDS | DiagnosticSessionControl can enter programming or elevated diagnostic sessions. |
+
+The implementation raises `SecurityViolationRedLine` for restricted services:
+
+```python
+RESTRICTED_SERVICE_IDS = frozenset(
+    {
+        0x08,
+        0x31,
+        0x04,
+        0x14,
+        0x2E,
+        0x10,
+    }
+)
+
+
+def command_filter(service_id: int) -> None:
+    """Block restricted write/control diagnostic services before CAN transmit."""
+    if service_id in RESTRICTED_SERVICE_IDS:
+        raise SecurityViolationRedLine(service_id)
+```
+
+## Validation Rules
+
+Frames are rejected when they:
+
+- Omit any required field.
+- Include additional fields outside the schema.
+- Provide numeric PIDs as strings or booleans.
+- Provide `vehicle_speed` as a fractional number.
+- Provide a VIN hash that is not exactly 64 lowercase hexadecimal characters.
+- Use any protocol outside `SAE_J1979` and `SAE_J1979_2`.
+- Exceed the physical PID ranges in the schema.
+
+Zero values are explicitly valid for `engine_rpm`, `vehicle_speed`, and `engine_load` to support key-on, engine-off telemetry.
+
+## Research Claims
+
+The US-001 PID selection is based on the AutoPulse core research claims tracked as APC-CORE-01 and APC-CORE-02:
+
+| Claim | Finding | US-001 implication |
+| --- | --- | --- |
+| APC-CORE-01 | The core engine telemetry set supports 98% engine fault detection accuracy in the linked research baseline. | RPM, speed, coolant temperature, and calculated load are mandatory in every frame. |
+| APC-CORE-02 | Short-term and long-term fuel trim analysis supports 92% fuel system detection accuracy in the linked research baseline. | `stft_bank1` and `ltft_bank1` are first-class required fields, not optional enrichment. |
+
+These findings are treated as design inputs for the data contract. Downstream detection quality depends on the ingestion layer preserving complete, validated, read-only PID coverage for each frame.
+
+The associated research source is tracked in the AutoPulse research database as "Analyzing the Effectiveness" (`https://ijarasem.com/admin/img/22_Analyzing%20the%20Effectiveness.pdf`).
