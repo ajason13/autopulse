@@ -14,10 +14,11 @@
 *   **US-001 (Data Contract):** ✅ **DONE**. Verified by Claude.
 *   **US-002 (Replay Harness):** ✅ **DONE**. Verified by Claude.
 *   **US-003 (PdM Algorithms):** ✅ **DONE**. 
-    *   Implemented core analysis engine (HDF/OSF/CircularBuffer) in `src/autopulse/analysis/`.
-    *   Statistical monitoring (Z-score/IQR) integrated into window summaries.
-    *   Technically reviewed by Codex and adversarial sign-off provided by Claude.
-    *   101/101 tests passing.
+*   **US-004 (Windowed Analysis):** ✅ **DONE**.
+    *   Implemented hybrid Median(3) → EWMA smoothing pipeline.
+    *   Refactored project to `src/autopulse/` package structure.
+    *   Specs moved to `docs/specs/` and synced with Starlight.
+    *   397/397 tests passing (including adversarial smoothing suite).
 *   **US-005 (Alerting Engine):** ✅ **DONE**.
     *   Implemented JSON-LD serialization in `src/autopulse/alert_exporter.py`.
     *   Security red lines (VIN hashing, RFC 8259 finite numbers) enforced.

@@ -1,0 +1,218 @@
+---
+title: US-002 Virtual Replay Harness
+description: Deterministic offline replay harness for validating AutoPulse ingestion against US-001 engine telemetry frames.
+---
+
+US-002 defines the offline replay harness used to exercise AutoPulse without a physical vehicle or live CAN interface. The harness normalizes source datasets into US-001 frames, enforces the read-only security policy, and replays frames at deterministic sampling rates for ingestion, anomaly, and regression testing.
+
+The implementation lives in `tests/simulation/virtual_replay.py`.
+
+## Architecture
+
+The replay harness has four layers:
+
+| Layer | Responsibility |
+| --- | --- |
+| `LogProvider` | Supplies raw rows from JSONL, CSV, or in-memory fixtures. |
+| Dataset parser | Converts source-specific columns or CAN payloads into US-001 field names. |
+| `MockAdapter` | Replaces the physical OBD adapter and returns validated `DataPacket` frames. |
+| `LogReplayer` | Drives the adapter at a configured frequency and records frames, errors, and timing intervals. |
+
+The harness does not bypass US-001. Every replayed frame is normalized and validated before it can be emitted to downstream code.
+
+## Dataset Mapping
+
+### CANdid
+
+CANdid-style rows are treated as decoded OBD-II observations when they expose a `pid` and payload bytes. The `CandidParser` maps each supported PID into the canonical US-001 field.
+
+The CANdid research claim identifies the dataset as high-fidelity CAN bus traces from 10 real-world production vehicles. In US-002, it provides replay validation coverage for signal jitter, protocol variance, and real automotive noise profiles.
+
+| CANdid PID | US-001 field | Decode rule |
+| --- | --- | --- |
+| `0x0C` | `engine_rpm` | `((A * 256) + B) / 4` |
+| `0x0D` | `vehicle_speed` | `A` |
+| `0x05` | `coolant_temp` | `A - 40` |
+| `0x04` | `engine_load` | `A * 100 / 255` |
+| `0x06` | `stft_bank1` | `A * 100 / 128 - 100` |
+| `0x07` | `ltft_bank1` | `A * 100 / 128 - 100` |
+
+Fuel-trim byte extremes are intentionally left unclamped. If a CANdid payload decodes outside the US-001 `-50.0` to `50.0` fuel-trim range, the schema rejects the frame as dirty replay input.
+
+### AI4I 2020
+
+AI4I 2020 is industrial predictive-maintenance telemetry rather than native OBD-II data. AutoPulse maps it into the US-001 engine frame for deterministic simulation and PdM algorithm testing.
+
+The AI4I 2020 research claim identifies the dataset as 10,000 labeled predictive-maintenance samples. Its temperature, torque, and rotational-speed features provide a controlled proxy for thermal and mechanical stress scenarios.
+
+| AI4I column | US-001 field | Mapping rule |
+| --- | --- | --- |
+| `Rotational speed [rpm]` | `engine_rpm` | Direct numeric copy. |
+| `Process temperature [K]` | `coolant_temp` | Kelvin to Celsius: `K - 273.15`. |
+| `Process temperature [C]` | `coolant_temp` | Direct numeric copy when Celsius is already provided. |
+| `Torque [Nm]` | `engine_load` | Clamped to `0.0` to `100.0` and used as load percent. |
+| Not present | `vehicle_speed` | Defaulted to `0` for stationary bench simulation. |
+| Not present | `stft_bank1` | Defaulted to `0.0`. |
+| Not present | `ltft_bank1` | Defaulted to `0.0`. |
+
+This mapping lets AI4I failure modes exercise the same validation and timing machinery as OBD-II traces while preserving US-001 boundaries.
+
+## Mock Interface
+
+`MockAdapter` implements the minimal read-only OBD adapter used by replay drivers. It is stateful, requires an explicit connection, and returns one normalized `DataPacket` per `fetch_frame()` call.
+
+```python
+class OBDAdapter(ABC):
+    """Minimal read-only OBD adapter interface used by replay drivers."""
+
+    @abstractmethod
+    def fetch_frame(self) -> "DataPacket":
+        """Fetch the next normalized engine data frame."""
+
+
+@dataclass(frozen=True)
+class DataPacket:
+    """Normalized US-001 engine frame returned by a replay adapter."""
+
+    timestamp: str
+    vin_hashed: str
+    protocol: str
+    engine_rpm: float
+    vehicle_speed: int
+    coolant_temp: float
+    engine_load: float
+    stft_bank1: float
+    ltft_bank1: float
+
+
+class MockAdapter(OBDAdapter):
+    """Stateful replay adapter that replaces a physical ELM327 adapter."""
+
+    def __init__(self, provider: LogProvider, loop: bool = False) -> None:
+        self._provider = provider
+        self._loop = loop
+        self._connected = False
+        self._security_violations: list[str] = []
+
+    def connect(self) -> None:
+        self._connected = True
+
+    def disconnect(self) -> None:
+        self._connected = False
+
+    def fetch_frame(self) -> DataPacket:
+        if not self._connected:
+            raise RuntimeError("Adapter not connected. Call connect() first.")
+        raw = self._next_row()
+        self._enforce_security(raw)
+        return self._normalize(raw)
+```
+
+`fetch_frame()` performs the critical replay contract:
+
+1. Confirms the adapter is connected.
+2. Reads the next source row from the configured provider.
+3. Loops only when the adapter was constructed with `loop=True`.
+4. Applies the US-001 restricted service filter when a row includes `__service_id__`.
+5. Adds default timestamp, hashed VIN, and protocol values only when absent.
+6. Rejects missing or null required numeric fields.
+7. Coerces each PID to the required Python type.
+8. Validates the final packet through the US-001 JSON Schema.
+
+Replay-facing protocol aliases are supported for harness ergonomics:
+
+| Replay alias | Schema protocol |
+| --- | --- |
+| `J1979_MODE01` | `SAE_J1979` |
+| `J1979_2_SERVICE22` | `SAE_J1979_2` |
+
+## Timing Engine
+
+`LogReplayer` drives a connected `MockAdapter` on a background thread at a deterministic cadence. It collects frames, replay errors, and dispatch timestamps so tests can assert both data correctness and timing behavior.
+
+```python
+class LogReplayer:
+    """Drive an OBD adapter at a deterministic replay cadence."""
+
+    def __init__(
+        self,
+        adapter: MockAdapter,
+        frequency_hz: int = 1,
+        drift: float = 0.0,
+    ) -> None:
+        if frequency_hz <= 0:
+            raise ValueError("frequency_hz must be positive.")
+        if drift < 0:
+            raise ValueError("drift must be non-negative.")
+        self._validate_drift_budget(frequency_hz, drift)
+        self._adapter = adapter
+        self._frequency_hz = frequency_hz
+        self._drift = drift
+
+    def start(self, max_frames: Optional[int] = None) -> None:
+        self._running = True
+        self._adapter.connect()
+        self._thread = threading.Thread(
+            target=self._run_loop,
+            args=(max_frames,),
+            daemon=True,
+        )
+        self._thread.start()
+
+    @property
+    def inter_frame_intervals(self) -> list[float]:
+        return [
+            timestamps[index + 1] - timestamps[index]
+            for index in range(len(timestamps) - 1)
+        ]
+```
+
+The supported synchronization modes are:
+
+| Mode | Interval | Use case |
+| --- | --- | --- |
+| `1Hz` | `1.0` second per frame | Baseline OBD-II polling, cold start gradients, and slow thermal behavior. |
+| `10Hz` | `0.1` second per frame | High-resolution replay for jitter, parser boundary cases, and temporal anomaly checks. |
+
+The replayer validates that injected drift remains below the selected frame interval. Tests assert timing accuracy within a 5% tolerance for both `1Hz` and `10Hz` replay.
+
+## Dirty Replay Strategy
+
+Dirty Replay is the adversarial mode for proving that ingestion rejects malformed or unsafe telemetry instead of silently normalizing it into downstream models.
+
+`NoiseGenerator` creates controlled mutations:
+
+```python
+class NoiseGenerator:
+    """Adversarial mutations for dirty replay scenarios."""
+
+    @staticmethod
+    def pid_drop(row: dict[str, Any], field_name: str | None = None) -> dict[str, Any]:
+        mutated = dict(row)
+        target = field_name or random.choice(sorted(NUMERIC_FIELDS))
+        mutated[target] = None
+        return mutated
+
+    @staticmethod
+    def out_of_bounds(row: dict[str, Any], field_name: str, value: Any) -> dict[str, Any]:
+        mutated = dict(row)
+        mutated[field_name] = value
+        return mutated
+
+    @staticmethod
+    def inject_restricted_service(row: dict[str, Any], service_id: str | int) -> dict[str, Any]:
+        mutated = dict(row)
+        mutated["__service_id__"] = service_id
+        return mutated
+```
+
+Dirty Replay covers:
+
+| Strategy | Example | Expected result |
+| --- | --- | --- |
+| PID dropping | Set `engine_rpm`, `coolant_temp`, or a fuel-trim field to `None`. | `MockAdapter.fetch_frame()` raises a validation error before emission. |
+| Out-of-bounds injection | Inject `engine_rpm=9501.0`, `coolant_temp=141.0`, `vehicle_speed=256`, or `stft_bank1=51.0`. | US-001 schema validation rejects the packet. |
+| CANdid byte extremes | Decode fuel trim payload byte `0x00` or `0xFF`. | Parser leaves decoded value unclamped; US-001 rejects it if outside range. |
+| Restricted service injection | Add `__service_id__="0x31"` or `__service_id__="0x08"`. | `MockAdapter` raises `SecurityViolationError` and records the violation. |
+
+This strategy ensures replay is not just a happy-path simulator. It is a deterministic adversarial harness for validating schema boundaries, protocol safety, data completeness, and timing stability.

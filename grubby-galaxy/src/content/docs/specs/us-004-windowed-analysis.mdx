@@ -1,0 +1,30 @@
+---
+title: US-004 Windowed Analysis (Smoothing)
+description: Technical specification for signal stabilization in AutoPulse.
+---
+
+# US-004: Windowed Analysis
+
+To prevent "alert flicker" caused by sensor noise, AutoPulse implements a hybrid smoothing pipeline for core OBD-II telemetry.
+
+## Problem Statement
+Instantaneous frame data from OBD-II adapters can contain electrical noise or non-physical spikes. When these values are passed directly to PdM detectors (HDF/OSF), they cause alerts to rapidly toggle between active and inactive states.
+
+## Solution: Hybrid Smoothing
+We implement a two-stage stabilization pipeline:
+
+1. **3-Point Median Filter**: Removes extreme non-physical outliers (spikes) without introducing phase shift.
+2. **EWMA (Exponentially Weighted Moving Average)**: Provides signal stabilization based on physical inertia.
+   - **RPM/Load**: alpha = 0.3
+   - **Coolant Temp**: alpha = 0.1
+
+## Data Flow
+- **Raw Data**: Used for `STATISTICAL_ANOMALY` detection (Z-score/IQR).
+- **Smoothed Data**: Used for `HDF` and `OSF` probability calculation.
+
+## Implementation Details
+- **Outlier Removal**: Apply a 3-point Median Filter to the raw signal.
+- **Stabilization**: Apply an Exponentially Weighted Moving Average (EWMA) to the filtered signal.
+- **Tuning**:
+    - RPM/Load: α = 0.3
+    - Coolant Temp: α = 0.1
