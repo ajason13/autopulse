@@ -27,7 +27,7 @@
       "type": "string",
       "enum": [
         "SAE_J1979",
-        "SAE_J1979_2"
+        "SAE_J1979-2"
       ]
     },
     "engine_rpm": {

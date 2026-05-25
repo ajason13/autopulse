@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AutoPulse EV Telemetry Frame (US-006)",
+  "description": "Strict schema for read-only EV telemetry frames using a shared envelope and isolated EV payload.",
+  "type": "object",
+  "required": [
+    "timestamp",
+    "vin_hashed",
+    "protocol",
+    "powertrain_type",
+    "payload"
+  ],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "vin_hashed": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "SAE_J1979-3",
+        "ISO_15765_4_DoCAN",
+        "ISO_13400_DoIP"
+      ]
+    },
+    "powertrain_type": {
+      "type": "string",
+      "enum": [
+        "EV"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "battery_soh",
+        "battery_soce",
+        "battery_temp_avg"
+      ],
+      "properties": {
+        "battery_soh": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 100.0,
+          "description": "Battery State of Health as a percentage."
+        },
+        "battery_soce": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 100.0,
+          "description": "ZEVonUDS State of Certified Energy percentage, not driver-facing State of Charge. Adapter source documentation must identify the DID/source and confirm this value is not an SOC proxy."
+        },
+        "battery_temp_avg": {
+          "type": "number",
+          "minimum": -40.0,
+          "maximum": 80.0,
+          "description": "Average high-voltage battery temperature in Celsius with a physics-based EV pack thermal ceiling."
+        },
+        "traction_motor_speed": {
+          "type": "integer",
+          "minimum": -20000,
+          "maximum": 20000,
+          "description": "Optional traction motor speed in RPM. Negative values are valid only with documented source sign convention."
+        },
+        "battery_throughput": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 500000.0,
+          "description": "Cumulative lifetime Ah throughput. Negative values are not permitted; this field does not represent net or signed throughput."
+        },
+        "grid_energy_in": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1000000.0,
+          "description": "Cumulative off-board grid energy in kWh with a generous lifetime vehicle ceiling."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

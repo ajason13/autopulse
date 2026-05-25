@@ -1,9 +1,11 @@
 # AutoPulse Project Context
 
 ## Current Epic
-**Epic 3: Documentation & Developer Experience**
+**Epic 4: Electric Vehicle Integration**
 *   **Status:** Building
-*   **Active Story:** **US-005 (Alerting Engine)** - Final Audit Phase.
+*   **Active Story:** **US-006 (EV Telemetry Data Contract)** - implementation complete; awaiting Claude final audit.
+*   **Notion Epic:** [Epic 4: Electric Vehicle Integration](https://www.notion.so/36a834a0c8a681109147c59a919b4335)
+*   **Notion Task:** [US-006 - EV Telemetry Data Contract Research (ZEVonUDS)](https://www.notion.so/36a834a0c8a681329c8ae05946ffae5b)
 
 ## Project Vitals
 *   **Mission:** Detect statistical drift in read-only OBD-II telemetry before DTCs appear.
@@ -24,13 +26,20 @@
     *   Security red lines (VIN hashing, RFC 8259 finite numbers) enforced.
     *   Verified against 81/81 adversarial tests by Codex and Claude.
     *   Final adversarial audit sign-off received from Claude.
+*   **US-006 (EV Telemetry Data Contract):** 🟥 **FINAL AUDIT**.
+    *   Implemented isolated EV schema, envelope routing, UDS adapter guardrails, EV replay/noise support, and EV JSON-LD safety events.
+    *   US-001 protocol enum patched to canonical `SAE_J1979-2`; replay aliases still normalize old underscore inputs.
+    *   EV anomaly analysis remains out of scope: no EV-HDF, EV-OSF, or EV statistical drift scoring was added.
+    *   Added public Starlight US-006 spec page.
+    *   Verification: US-006 targeted suite `212 passed`; full suite `531 passed`; Starlight build passed with Node 24.
 
 ## Active Constraints
 *   **Read-Only Only:** Any write-access logic is a P0 security violation.
 *   **Physics-Based Validation:** RPM must be rejected if > 9,500; Temp rejected if > 140C.
 *   **Sliding Window:** US-003 alerts must use a 60s window (circular buffer) to prevent flicker.
+*   **EV Implementation Boundary:** US-006 implementation may proceed only within schema/routing/adapter/replay/JSON-LD safety scope. Do not implement EV-HDF, EV-OSF, or EV anomaly scoring in this story.
 
 ## Team Roster (2026)
-*   **Lead Architect:** Gemini CLI (Gemini 3.1 Flash Lite)
+*   **Lead Architect & Coordinator:** Antigravity CLI (Gemini 3.5 Flash Medium); Gemini Chat Deep Research for standards-heavy architecture.
 *   **Lead Developer:** Codex (GPT-5.5)
 *   **Lead Auditor:** Claude (Sonnet 4.6)

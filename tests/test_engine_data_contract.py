@@ -72,7 +72,7 @@ class TestSchemaHappyPath:
 
     def test_protocol_j1979_2_accepted(self):
         """Both enumerated protocol strings must be accepted."""
-        validate_frame(mutate(GOLDEN_FRAME, protocol="SAE_J1979_2"))
+        validate_frame(mutate(GOLDEN_FRAME, protocol="SAE_J1979-2"))
 
     def test_all_numeric_fields_as_floats(self):
         """JSON numbers with decimal points must be accepted for all numeric PIDs."""
