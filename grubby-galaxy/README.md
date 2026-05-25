@@ -31,6 +31,19 @@ npm run build
 npm run preview
 ```
 
+The configured production base path is `/autopulse/`, so preview URLs are served from
+[http://localhost:4321/autopulse/](http://localhost:4321/autopulse/).
+
+## Smoke Tests
+
+Run the Starlight homepage smoke suite with:
+
+```sh
+npm run test:smoke
+```
+
+This builds the docs, starts an Astro preview server, and checks the homepage shell, mobile menu, desktop sidebar, and GitHub Pages base-path links.
+
 ## Key Documentation
 
 The specifications are available at the following local routes (when the dev server is running):
@@ -67,6 +80,7 @@ Inside this folder, you'll see:
 | `npm run dev`             | Starts local dev server at `localhost:4321`      |
 | `npm run build`           | Build your production site to `./dist/`          |
 | `npm run preview`         | Preview your build locally, before deploying     |
+| `npm run test:smoke`      | Run Starlight homepage smoke checks              |
 | `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
 
 ## 👀 Learn More

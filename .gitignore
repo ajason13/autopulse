@@ -222,3 +222,9 @@ data/raw/
 data/processed/
 *.dbc
 models/*.joblib
+
+# Local browser automation artifacts
+.playwright-cli/
+grubby-galaxy/test-results/
+grubby-galaxy/playwright-report/
+grubby-galaxy/blob-report/
