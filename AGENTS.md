@@ -86,6 +86,8 @@ No exception is allowed for convenience or partial local confidence. If the audi
 
 Codex may use reusable local skills from `~/.codex/skills/` to improve consistency and token efficiency.
 
+Reviewable source copies for AutoPulse-specific and reusable SDLC skills live under `docs/codex-skills/`. To activate or refresh them for local Codex sessions, copy the desired skill directories into `~/.codex/skills/`.
+
 Recommended skills for this repository:
 
 - `model-routing`: Choose the smallest safe model and reasoning effort for each task.
@@ -93,6 +95,11 @@ Recommended skills for this repository:
 - `audit-response`: Handle Claude/auditor findings with reproduction, focused fixes, and verification.
 - `docs-publishing`: Convert specs and research notes into public documentation.
 - `local-dev-handoff`: Document setup, build, test, preview, and environment commands.
+- `autopulse-sdlc-governance`: Follow AutoPulse story, audit, handoff, and merge-gate protocol.
+- `autopulse-obd-schema-security`: Enforce read-only OBD-II/UDS schema, adapter, replay, and exporter rules.
+- `autopulse-starlight-docs-qa`: Verify Starlight docs, GitHub Pages base-path behavior, and Playwright docs checks.
+- `autopulse-notion-sync`: Keep Notion story, hub, wiki, and future-work pages aligned with repo state.
+- `autopulse-pr-release-checklist`: Prepare AutoPulse PR summaries, verification notes, and risk sections.
 
 Repository governance in this `AGENTS.md` takes precedence over any reusable skill. Security red lines, source-of-truth rules, and the `main` merge handshake cannot be relaxed by a skill.
 
