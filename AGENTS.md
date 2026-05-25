@@ -88,6 +88,8 @@ Codex may use reusable local skills from `~/.codex/skills/` to improve consisten
 
 Reviewable source copies for AutoPulse-specific and reusable SDLC skills live under `docs/codex-skills/`. To activate or refresh them for local Codex sessions, copy the desired skill directories into `~/.codex/skills/`.
 
+Public-vs-local AI artifact rules are defined in `docs/ai-artifacts-policy.md`. Keep durable, sanitized governance and prompts in git; keep local agent state, private workspace links, scratch prompts, and raw transcripts out of the repository.
+
 Recommended skills for this repository:
 
 - `model-routing`: Choose the smallest safe model and reasoning effort for each task.
