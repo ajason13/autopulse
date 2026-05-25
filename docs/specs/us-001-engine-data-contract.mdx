@@ -43,7 +43,7 @@ US-001 accepts only passive diagnostic data from SAE J1979 Mode 01 or SAE J1979-
       "type": "string",
       "enum": [
         "SAE_J1979",
-        "SAE_J1979_2"
+        "SAE_J1979-2"
       ]
     },
     "engine_rpm": {
@@ -159,7 +159,7 @@ Frames are rejected when they:
 - Provide numeric PIDs as strings or booleans.
 - Provide `vehicle_speed` as a fractional number.
 - Provide a VIN hash that is not exactly 64 lowercase hexadecimal characters.
-- Use any protocol outside `SAE_J1979` and `SAE_J1979_2`.
+- Use any protocol outside `SAE_J1979` and `SAE_J1979-2`.
 - Exceed the physical PID ranges in the schema.
 
 Zero values are explicitly valid for `engine_rpm`, `vehicle_speed`, and `engine_load` to support key-on, engine-off telemetry.

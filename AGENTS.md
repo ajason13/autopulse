@@ -6,9 +6,9 @@ AutoPulse is governed by a 2026 Multi-LLM engineering team model. Each agent has
 
 ## Team Structure
 
-### Lead Architect: Gemini 3.1 Flash Lite Preview
+### Lead Architect & Coordinator: Antigravity CLI
 
-Model: `gemini-3.1-flash-lite-preview`
+Model: `Gemini 3.5 Flash` (Medium)
 
 Primary ownership:
 
@@ -16,12 +16,14 @@ Primary ownership:
 - Standards alignment, including SAE J1979-2 OBD-II and related diagnostic constraints.
 - Architecture decisions, system boundaries, and technical specifications.
 - Data contract intent for OBD-II ingestion, replay, anomaly scoring, and reporting.
+- Workflow coordination, managing `CONTEXT.md` active memory, and Notion automation.
 
 Required outputs:
 
 - Technical design notes in `docs/`.
 - Standards compliance notes for any PID, service, or protocol assumption.
 - Architecture review before implementation begins on new subsystems.
+- Handoff prompts and verification coordination.
 
 ### Lead Developer: Codex / GPT-5.5
 
@@ -59,15 +61,15 @@ Required outputs:
 
 ## Handshake Protocol
 
-The transition from research/QA to implementation is automated via the Gemini CLI to eliminate "clipboard lag."
+The transition from research/QA to implementation is automated via the Antigravity CLI (Gemini 3.5 Flash) to eliminate "clipboard lag."
 
-1. **Automated Handoff:** Gemini CLI packages the Lead Auditor's test suite and the Lead Architect's research into a structured prompt.
-2. **Direct Execution:** Gemini CLI triggers Codex implementation using `codex exec "[PROMPT]"`.
+1. **Automated Handoff:** Antigravity CLI packages the Lead Auditor's test suite and the architectural specifications into a structured prompt.
+2. **Direct Execution:** Antigravity CLI triggers Codex implementation using `codex exec "[PROMPT]"`.
 3. **Verification:** 
     - Codex runs the full auditor-generated test suite.
     - The test run must report a 100% pass rate.
     - Codex records the verification command and result in the implementation summary.
-4. **Final Sign-off:** Any failing test must be fixed or escalated back to the Lead Architect and Lead Auditor.
+4. **Final Sign-off:** Any failing test must be fixed or escalated back to the Lead Architect/Coordinator and Lead Auditor.
 
 No exception is allowed for convenience or partial local confidence. If the auditor test suite cannot be executed via `codex exec` or fails, Codex must not commit to `main`.
 

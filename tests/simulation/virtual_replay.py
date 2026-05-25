@@ -18,7 +18,14 @@ from typing import Any, Iterable, Mapping, Optional, Protocol
 
 from jsonschema import ValidationError
 
-from autopulse.data.validator import command_filter, validate_frame
+from autopulse.data.validator import (
+    CommandBlockedException,
+    UDSCommandGuard,
+    command_filter,
+    route_and_validate,
+    validate_ev_frame,
+    validate_frame,
+)
 
 
 US001_REQUIRED_FIELDS = frozenset(
@@ -46,6 +53,35 @@ NUMERIC_FIELDS = frozenset(
     }
 )
 
+EV_REQUIRED_FIELDS = frozenset(
+    {
+        "battery_soh",
+        "battery_soce",
+        "battery_temp_avg",
+    }
+)
+
+EV_OPTIONAL_FIELDS = frozenset(
+    {
+        "traction_motor_speed",
+        "battery_throughput",
+        "grid_energy_in",
+    }
+)
+
+EV_NUMERIC_FIELDS = EV_REQUIRED_FIELDS | EV_OPTIONAL_FIELDS
+ICE_ONLY_FIELDS = frozenset(
+    {
+        "engine_rpm",
+        "vehicle_speed",
+        "coolant_temp",
+        "engine_load",
+        "stft_bank1",
+        "ltft_bank1",
+        "ambient_temp",
+    }
+)
+
 US001_BOUNDS: dict[str, tuple[float, float]] = {
     "engine_rpm": (0.0, 9500.0),
     "vehicle_speed": (0.0, 255.0),
@@ -57,9 +93,10 @@ US001_BOUNDS: dict[str, tuple[float, float]] = {
 
 PROTOCOL_ALIASES = {
     "SAE_J1979": "SAE_J1979",
-    "SAE_J1979_2": "SAE_J1979_2",
+    "SAE_J1979_2": "SAE_J1979-2",
+    "SAE_J1979-2": "SAE_J1979-2",
     "J1979_MODE01": "SAE_J1979",
-    "J1979_2_SERVICE22": "SAE_J1979_2",
+    "J1979_2_SERVICE22": "SAE_J1979-2",
 }
 
 REPLAY_PROTOCOLS = frozenset({"J1979_MODE01", "J1979_2_SERVICE22"})
@@ -68,6 +105,13 @@ SLEEP_GUARD_SECONDS = 0.002
 
 class SecurityViolationError(Exception):
     """Raised when a restricted diagnostic service appears in replay input."""
+
+
+class ReplayMode:
+    """Replay modes for US-006 passive and test-only burst playback."""
+
+    PASSIVE = "PASSIVE"
+    BURST = "BURST"
 
 
 class RowParser(Protocol):
@@ -126,6 +170,31 @@ class DataPacket:
             self.protocol,
         )
         return payload
+
+
+@dataclass(frozen=True)
+class EVDataPacket:
+    """Normalized US-006 EV telemetry frame returned by replay adapters."""
+
+    timestamp: str
+    vin_hashed: str
+    protocol: str
+    powertrain_type: str
+    payload: Mapping[str, Any]
+    _raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "payload", MappingProxyType(dict(self.payload)))
+        object.__setattr__(self, "_raw", MappingProxyType(dict(self._raw)))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "timestamp": self.timestamp,
+            "vin_hashed": self.vin_hashed,
+            "protocol": self.protocol,
+            "powertrain_type": self.powertrain_type,
+            "payload": dict(self.payload),
+        }
 
 
 class LogProvider(ABC):
@@ -372,6 +441,41 @@ class NoiseGenerator:
         mutated["__service_id__"] = service_id
         return mutated
 
+    @staticmethod
+    def inject_soh_oscillation(
+        rows: Iterable[dict[str, Any]],
+        low: float = 5.0,
+        high: float = 95.0,
+    ) -> list[dict[str, Any]]:
+        mutated: list[dict[str, Any]] = []
+        for index, row in enumerate(rows):
+            item = dict(row)
+            item["battery_soh"] = high if index % 2 == 0 else low
+            mutated.append(item)
+        return mutated
+
+    @staticmethod
+    def inject_thermal_spike(
+        row: dict[str, Any],
+        value: float = 81.0,
+    ) -> dict[str, Any]:
+        mutated = dict(row)
+        mutated["battery_temp_avg"] = value
+        return mutated
+
+    @staticmethod
+    def inject_soce_cliff(
+        rows: Iterable[dict[str, Any]],
+        start: float = 80.0,
+        end: float = 0.0,
+    ) -> list[dict[str, Any]]:
+        mutated = [dict(row) for row in rows]
+        if mutated:
+            mutated[0]["battery_soce"] = start
+        if len(mutated) > 1:
+            mutated[1]["battery_soce"] = end
+        return mutated
+
 
 class MockAdapter(OBDAdapter):
     """Stateful replay adapter that replaces a physical ELM327 adapter."""
@@ -475,7 +579,7 @@ class MockAdapter(OBDAdapter):
         protocol = str(value)
         if protocol not in PROTOCOL_ALIASES:
             raise ValidationError(f"protocol '{protocol}' is not allowed.")
-        if replay_facing and protocol in {"SAE_J1979", "SAE_J1979_2"}:
+        if replay_facing and protocol in {"SAE_J1979", "SAE_J1979_2", "SAE_J1979-2"}:
             if protocol == "SAE_J1979":
                 return "J1979_MODE01"
             return "J1979_2_SERVICE22"
@@ -514,6 +618,138 @@ class MockAdapter(OBDAdapter):
     @staticmethod
     def _validate_packet(packet: DataPacket) -> None:
         validate_frame(packet.to_schema_dict())
+
+
+class EVMockAdapter(OBDAdapter):
+    """Stateful replay adapter for read-only US-006 EV telemetry."""
+
+    _DEFAULT_VIN = hashlib.sha256(uuid.uuid4().bytes).hexdigest()
+    _DEFAULT_PROTOCOL = "SAE_J1979-3"
+
+    def __init__(
+        self,
+        provider: LogProvider,
+        *,
+        sign_convention_documented: bool = True,
+        loop: bool = False,
+    ) -> None:
+        self._provider = provider
+        self._loop = loop
+        self._connected = False
+        self.guard = UDSCommandGuard()
+        self.sign_convention_documented = sign_convention_documented
+        self.events: list[str] = []
+        self._active_protocol: str | None = None
+
+    def connect(self) -> None:
+        self._connected = True
+
+    def disconnect(self) -> None:
+        self._connected = False
+
+    def fetch_frame(self) -> EVDataPacket:
+        if not self._connected:
+            raise RuntimeError("Adapter not connected. Call connect() first.")
+        raw = self._next_row()
+        self._enforce_security(raw)
+        packet = self._normalize(raw)
+        route_and_validate(packet.to_dict())
+        return packet
+
+    def _next_row(self) -> dict[str, Any]:
+        try:
+            return self._provider.get_next_row()
+        except StopIteration:
+            if not self._loop:
+                raise
+            self._provider.reset()
+            return self._provider.get_next_row()
+
+    def _enforce_security(self, row: dict[str, Any]) -> None:
+        dtcs = row.get("__observed_dtcs__")
+        if dtcs is not None:
+            self.guard.observe_dtcs([str(dtc) for dtc in dtcs])
+
+        service_id = row.get("__service_id__")
+        if service_id is not None:
+            try:
+                self.guard.validate(
+                    service_id,
+                    row.get("__sub_function__"),
+                    dtc=row.get("__dtc__"),
+                    now=row.get("__now__"),
+                )
+            except CommandBlockedException as exc:
+                self.events.extend(self.guard.events)
+                raise SecurityViolationError(str(exc)) from exc
+
+        protocol = str(row.get("protocol") or self._DEFAULT_PROTOCOL)
+        if self._active_protocol is None:
+            self._active_protocol = protocol
+            return
+
+        if self._active_protocol == protocol:
+            return
+
+        try:
+            self.guard.check_protocol_transition(
+                self._active_protocol,
+                protocol,
+            )
+        except CommandBlockedException as exc:
+            self.events.extend(self.guard.events)
+            raise SecurityViolationError(str(exc)) from exc
+
+        self.guard.events.append("PROTOCOL_TRANSITION_BLOCKED")
+        self.events.extend(self.guard.events)
+        raise SecurityViolationError(
+            "PROTOCOL_TRANSITION_BLOCKED: active EV session protocol changed."
+        )
+
+    def _normalize(self, raw: dict[str, Any]) -> EVDataPacket:
+        row = dict(raw)
+        row["timestamp"] = row.get("timestamp") or MockAdapter._timestamp()
+        row["vin_hashed"] = row.get("vin_hashed") or self._DEFAULT_VIN
+        row["protocol"] = row.get("protocol") or self._DEFAULT_PROTOCOL
+        row["powertrain_type"] = row.get("powertrain_type") or "EV"
+
+        payload = dict(row.get("payload") or {})
+        for field_name in ICE_ONLY_FIELDS:
+            if field_name in row:
+                payload[field_name] = row[field_name]
+        for field_name in EV_NUMERIC_FIELDS:
+            if field_name in row and field_name not in payload:
+                payload[field_name] = row[field_name]
+
+        missing = sorted(
+            field for field in EV_REQUIRED_FIELDS if payload.get(field) is None
+        )
+        if missing:
+            raise ValidationError(
+                f"Required field '{missing[0]}' is null/missing."
+            )
+
+        motor_speed = payload.get("traction_motor_speed")
+        if motor_speed is not None:
+            try:
+                self.guard.validate_motor_speed_sign_convention(
+                    int(motor_speed),
+                    sign_convention_documented=self.sign_convention_documented,
+                )
+            except CommandBlockedException as exc:
+                self.events.extend(self.guard.events)
+                raise SecurityViolationError(str(exc)) from exc
+
+        packet = EVDataPacket(
+            timestamp=str(row["timestamp"]),
+            vin_hashed=str(row["vin_hashed"]),
+            protocol=str(row["protocol"]),
+            powertrain_type=str(row["powertrain_type"]),
+            payload=payload,
+            _raw=raw,
+        )
+        validate_ev_frame(packet.to_dict())
+        return packet
 
 
 class LogReplayer:
@@ -624,3 +860,29 @@ class LogReplayer:
             if sleep_for > 0:
                 time.sleep(sleep_for)
             count += 1
+
+
+def replay_ev_sequence(
+    rows: Iterable[dict[str, Any]],
+    *,
+    mode: str = ReplayMode.PASSIVE,
+    env: str = "test",
+) -> list[EVDataPacket]:
+    """Replay EV rows through the US-006 adapter.
+
+    Burst mode is intentionally available only for tests so production passive
+    monitoring cannot silently exceed the 1 Hz safety boundary.
+    """
+    if mode == ReplayMode.BURST and env != "test":
+        raise SecurityViolationError("BURST_MODE_VIOLATION")
+
+    adapter = EVMockAdapter(JSONLProvider(rows))
+    adapter.connect()
+    frames: list[EVDataPacket] = []
+    try:
+        while True:
+            frames.append(adapter.fetch_frame())
+    except StopIteration:
+        return frames
+    finally:
+        adapter.disconnect()

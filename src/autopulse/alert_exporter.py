@@ -11,6 +11,15 @@ from uuid import uuid4
 _VIN_HASH_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _RAW_VIN_PATTERN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 _VALID_FAILURE_TYPES = frozenset({"HDF", "OSF"})
+_VALID_EV_EVENT_TYPES = frozenset(
+    {
+        "EV_SCHEMA_REJECTION",
+        "EV_VALIDATION_EVENT",
+        "SECURITY_VIOLATION_RED_LINE",
+        "SECURITY_VIOLATION_HIGH",
+        "POWERTRAIN_ROUTING_MISMATCH",
+    }
+)
 
 
 def _service_key(prefix: str, service_id: str) -> str:
@@ -40,6 +49,15 @@ _CONTEXT: Mapping[str, str] = MappingProxyType(
         "failure_probability": "schema:probability",
         "failure_type": "autopulse:failureMode",
         "window_summary": "sosa:hasResult",
+        "powertrain_type": "autopulse:powertrainType",
+        "event_type": "autopulse:eventType",
+        "evidence": "sosa:hasResult",
+        "battery_soh": "autopulse:batteryStateOfHealth",
+        "battery_soce": "autopulse:stateOfCertifiedEnergy",
+        "battery_temp_avg": "autopulse:averageBatteryTemperature",
+        "traction_motor_speed": "vss:Vehicle.Powertrain.ElectricMotor.Speed",
+        "battery_throughput": "autopulse:batteryThroughput",
+        "grid_energy_in": "autopulse:gridEnergyInput",
     }
 )
 
@@ -50,6 +68,14 @@ class PdMAlert:
     failure_probability: float
     failure_type: str
     window_summary: dict[str, Any] | None
+
+
+@dataclass
+class EVTelemetryAlert:
+    vin_hashed: str
+    event_type: str
+    evidence: dict[str, Any]
+    powertrain_type: str = "EV"
 
 
 def serialize_alert(alert: PdMAlert) -> dict[str, Any]:
@@ -67,6 +93,20 @@ def serialize_alert(alert: PdMAlert) -> dict[str, Any]:
     }
 
 
+def serialize_ev_alert(alert: EVTelemetryAlert) -> dict[str, Any]:
+    """Serialize a US-006 EV validation/security event into JSON-LD."""
+    _validate_ev_alert(alert)
+    return {
+        "@context": dict(_CONTEXT),
+        "@type": "sosa:Observation",
+        "@id": f"urn:uuid:{uuid4()}",
+        "vin_hashed": alert.vin_hashed,
+        "powertrain_type": alert.powertrain_type,
+        "event_type": alert.event_type,
+        "evidence": _sanitize_window_summary(alert.evidence),
+    }
+
+
 def _validate_alert(alert: PdMAlert) -> None:
     if not isinstance(alert, PdMAlert):
         raise TypeError("alert must be a PdMAlert instance.")
@@ -76,6 +116,18 @@ def _validate_alert(alert: PdMAlert) -> None:
 
     if alert.failure_type not in _VALID_FAILURE_TYPES:
         raise ValueError("failure_type must be exactly 'HDF' or 'OSF'.")
+
+
+def _validate_ev_alert(alert: EVTelemetryAlert) -> None:
+    if not isinstance(alert, EVTelemetryAlert):
+        raise TypeError("alert must be an EVTelemetryAlert instance.")
+    _validate_vin_hash(alert.vin_hashed)
+    if alert.powertrain_type != "EV":
+        raise ValueError("powertrain_type must be exactly 'EV'.")
+    if alert.event_type not in _VALID_EV_EVENT_TYPES:
+        raise ValueError("event_type is not valid for US-006 EV alerts.")
+    if not isinstance(alert.evidence, dict):
+        raise TypeError("evidence must be a dict.")
 
 
 def _validate_vin_hash(vin_hashed: str) -> None:
@@ -126,6 +178,10 @@ def _sanitize_value(value: Any) -> Any:
 
             key_lower = key.lower()
             if key == "@context" or key_lower in _RESTRICTED_KEYS:
+                continue
+            if key_lower in {"raw_vin", "vin"}:
+                raise ValueError("window_summary must not contain a raw VIN.")
+            if "payload_bytes" in key_lower:
                 continue
 
             sanitized[key] = _sanitize_value(item)
@@ -178,4 +234,9 @@ def _validate_iqr_bounds(summary: Mapping[str, Any]) -> None:
         raise ValueError("iqr_bounds lower value must not exceed upper value.")
 
 
-__all__ = ["PdMAlert", "serialize_alert"]
+__all__ = [
+    "EVTelemetryAlert",
+    "PdMAlert",
+    "serialize_alert",
+    "serialize_ev_alert",
+]
