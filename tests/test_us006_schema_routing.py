@@ -67,6 +67,16 @@ def routed_ice_frame(**overrides):
     return frame
 
 
+def contains_key(value, target_key):
+    if isinstance(value, dict):
+        return target_key in value or any(
+            contains_key(item, target_key) for item in value.values()
+        )
+    if isinstance(value, list):
+        return any(contains_key(item, target_key) for item in value)
+    return False
+
+
 def test_iso_001_us001_required_fields_unchanged():
     schema = load_engine_obd_frame_schema()
     assert set(schema["required"]) == {
@@ -84,8 +94,9 @@ def test_iso_001_us001_required_fields_unchanged():
 
 def test_iso_002_ev_schema_does_not_ref_us001_schema():
     schema_text = (ROOT / "schemas" / "ev_obd_frame.schema.json").read_text()
+    schema = json.loads(schema_text)
     assert "engine_obd_frame.schema.json" not in schema_text
-    assert "$ref" not in json.loads(schema_text)
+    assert not contains_key(schema, "$ref")
 
 
 def test_iso_003_ice_frame_rejected_by_ev_validator():
