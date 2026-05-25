@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import mermaid from 'astro-mermaid';
 import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
@@ -7,6 +8,9 @@ export default defineConfig({
 	site: 'https://ajason13.github.io',
 	base: '/autopulse/',
 	integrations: [
+		mermaid({
+			autoTheme: true,
+		}),
 		starlight({
 			title: 'AutoPulse Docs',
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/ajason13/autopulse' }],

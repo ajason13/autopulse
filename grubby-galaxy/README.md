@@ -22,6 +22,14 @@ npm run dev
 
 The site will be available at [http://localhost:4321](http://localhost:4321).
 
+The project currently pins Node via `.nvmrc` to the active LTS/current version used by CI-compatible local builds. If `npm install` fails with `EACCES` under `~/.npm`, the local npm cache contains files owned by another user. Avoid changing project dependencies to work around that; either repair the cache ownership outside the repo or run one install with a temporary cache:
+
+```sh
+npm install --cache /private/tmp/autopulse-npm-cache
+```
+
+For peer-resolution errors from npm 11 against otherwise compatible Astro/Starlight packages, prefer a targeted `--legacy-peer-deps` install over `--force`.
+
 ## Build and Preview
 
 To create a production build and preview it:

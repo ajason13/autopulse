@@ -29,14 +29,16 @@ The physics-based limits implemented in the US-001 validator are designed for **
 | **TC-BND-01** | **> 9,500 RPM** | 16,383 RPM | 9,500 RPM exceeds the valvetrain stability (valve float) of 99% of production passenger engines. |
 | **TC-BND-02** | **> 140°C** | 215°C | 140°C is the critical thermal failure point where pressurized 50/50 coolant boils. |
 
-## 3. Future-Proofing: SAE J1979-3 (ZEVonUDS)
+## 3. EV Telemetry Contract: SAE J1979-3 (ZEVonUDS)
 
-For the upcoming **Electric Vehicle (EV) Integration Epic**, the system will pivot to the **ZEVonUDS** standard:
+US-006 establishes AutoPulse's first read-only electric-vehicle telemetry contract using the **ZEVonUDS** direction:
 
 * **Battery State of Health (SOH)**: Mandatory for quantitative assessment of residual battery life.
-* **Propulsion Battery Remaining Energy**: Replaces fuel level for range estimation.
-* **High-Voltage Battery Temperature**: Replaces Engine Coolant Temp as the primary thermal safety metric.
-* **Traction Motor Rotational Speed**: Replaces Engine RPM for drivetrain monitoring.
+* **State of Certified Energy (SOCE)**: EV energy metric validated separately from driver-facing State of Charge.
+* **High-Voltage Battery Temperature**: Replaces Engine Coolant Temp as the primary thermal safety signal.
+* **Traction Motor Rotational Speed**: Replaces Engine RPM for drivetrain monitoring where adapter source documentation defines the sign convention.
+
+US-006 remains limited to schema validation, routing isolation, adapter safety guardrails, replay coverage, and JSON-LD serialization safety. EV-HDF, EV-OSF, time-of-use, V2X discharge tracking, certified energy consumption, and automatic DoCAN-to-DoIP discovery are deferred to future stories.
 
 ---
 
