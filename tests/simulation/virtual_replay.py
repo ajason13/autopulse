@@ -576,6 +576,12 @@ class MockAdapter(OBDAdapter):
 
     @staticmethod
     def _normalize_protocol(value: Any, replay_facing: bool = False) -> str:
+        """Normalize protocol names.
+
+        ``replay_facing=True`` intentionally returns replay-internal aliases.
+        ``DataPacket.to_schema_dict()`` converts those aliases back to canonical
+        schema protocol values immediately before US-001 validation.
+        """
         protocol = str(value)
         if protocol not in PROTOCOL_ALIASES:
             raise ValidationError(f"protocol '{protocol}' is not allowed.")
@@ -714,6 +720,9 @@ class EVMockAdapter(OBDAdapter):
         row["powertrain_type"] = row.get("powertrain_type") or "EV"
 
         payload = dict(row.get("payload") or {})
+        # Dirty replay rows often inject fields at top level. Promote ICE-only
+        # contamination into the EV payload so `additionalProperties: false`
+        # rejects it through the same schema gate as nested contamination.
         for field_name in ICE_ONLY_FIELDS:
             if field_name in row:
                 payload[field_name] = row[field_name]

@@ -194,3 +194,13 @@ Claude's final re-review returned a conditional pass. These minor corrections ar
 - `ISO-012`: submit `protocol: "SAE_J1979-3"` with `powertrain_type: "ICE"`; router rejects as an envelope-level protocol/powertrain mismatch before payload validation.
 - `SEC-018`: submit `traction_motor_speed = -5000` from an adapter source with no registered sign convention; adapter rejects or flags `SIGN_CONVENTION_UNDOCUMENTED`.
 - `SEC-019`: call `0x19/0x06` with a DTC number not previously observed through `0x19/0x02`; adapter logs `SPECULATIVE_DTC_PROBE`.
+
+## Future Work
+
+Claude's final implementation audit approved US-006 and left non-blocking recommendations for future stories:
+
+- Consider converting `ReplayMode` from string constants to `enum.Enum` if replay gains more modes.
+- Add bounded or drainable event storage to `UDSCommandGuard` if it moves from short-lived replay/test sessions into long-running production sessions.
+- Add a future sustained SOCE cliff helper if replay tests need multi-frame post-drop behavior beyond the current two-frame cliff injection.
+- Evaluate low-temperature EV charging risk in a future EV anomaly story; `battery_temp_avg < -20.0C` while SOCE is rising may indicate lithium-plating risk, but this is out of US-006 scope.
+- Keep EV-HDF, EV-OSF, time-of-use, V2X discharge tracking, certified energy consumption, and automatic DoCAN-to-DoIP discovery out of US-006 unless a separate story defines their safety model and QA plan.

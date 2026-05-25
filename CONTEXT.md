@@ -32,6 +32,8 @@
     *   EV anomaly analysis remains out of scope: no EV-HDF, EV-OSF, or EV statistical drift scoring was added.
     *   Added public Starlight US-006 spec page.
     *   Verification: US-006 targeted suite `212 passed`; full suite `531 passed`; Starlight build passed with Node 24.
+    *   Claude final audit passed; follow-up branch `us-006-audit-followup` addresses documentation/test-harness observations and records future work.
+    *   Future EV work: ReplayMode enum, bounded UDS event buffers, sustained SOCE-cliff helper, low-temperature charging anomaly research, and separate EV-HDF/EV-OSF story.
 
 ## Active Constraints
 *   **Read-Only Only:** Any write-access logic is a P0 security violation.

@@ -107,7 +107,12 @@ def validate_ev_frame(frame: dict[str, Any]) -> None:
 
 
 def route_and_validate(frame: dict[str, Any]) -> str:
-    """Validate a shared-envelope frame and return the selected powertrain."""
+    """Validate a shared-envelope frame and return the selected powertrain.
+
+    EV frames are validated as full US-006 envelope objects. ICE frames predate
+    the envelope model, so routing validates only the nested US-001 flat payload.
+    Do not pass the full ICE envelope to ``validate_frame()``.
+    """
     if not isinstance(frame, dict):
         raise TypeError("frame must be a dict.")
 
