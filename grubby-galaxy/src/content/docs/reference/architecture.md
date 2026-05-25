@@ -27,13 +27,13 @@ graph TD
 ## Core Layers
 
 ### 1. Data Ingestion & Validation
-Defined in the [US-001 Data Contract](/specs/us-001-engine-data-contract/), this layer ensures that incoming sensor data satisfies physical constraints (e.g., RPM < 9,500) and security mandates (e.g., VIN hashing). It normalizes raw automotive signals into a consistent JSON format.
+Defined in the [US-001 Data Contract](../../specs/us-001-engine-data-contract/), this layer ensures that incoming sensor data satisfies physical constraints (e.g., RPM < 9,500) and security mandates (e.g., VIN hashing). It normalizes raw automotive signals into a consistent JSON format.
 
 ### 2. Temporal Analysis (Stateful)
 Because a single OBD frame lacks context, AutoPulse maintains a **60-second sliding window** using high-performance circular buffers. This layer computes rolling statistics (min, max, mean, std_dev) used for drift detection.
 
 ### 3. PdM Inference (Algorithms)
-The [US-003 Algorithms](/reference/anomaly-detection/) evaluate the temporal state against known vehicle failure modes:
+The [US-003 Algorithms](../anomaly-detection/) evaluate the temporal state against known vehicle failure modes:
 - **HDF**: Uses thermal delta and RPM conjunctions.
 - **OSF**: Accumulates workload factor stress with lugging penalties.
 - **Statistical**: Monitors Z-score and IQR for unexpected drift in healthy sensors.
