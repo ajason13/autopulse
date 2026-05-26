@@ -10,6 +10,25 @@ Implementation audit before merge.
 
 Codex added the first debugging layer for AutoPulse. Review for privacy leakage, security red-line regressions, and missing adversarial tests.
 
+This is not an ideation, product discovery, or greenfield project brainstorming task. Any response that does not evaluate the AutoPulse files and constraints listed below is not a valid audit result.
+
+## Response Validity Requirements
+
+Before returning a verdict, inspect or reason from the listed AutoPulse implementation files. If you cannot inspect the files on `main`, say so directly and return `INSUFFICIENT_REPO_ACCESS` instead of proposing unrelated project ideas.
+
+A valid audit response must:
+
+- Reference the debugging implementation surface by file or behavior.
+- Evaluate whether debug logs, CLI output, validation errors, replay events, and alert serialization can leak raw VINs, diagnostic payload bytes, seed-key material, tokens, secrets, or private workspace data.
+- Evaluate whether the debugging code weakens OBD-II/UDS read-only guardrails, EV burst-mode scoping, schema validation, routing, replay behavior, or alert serialization.
+- Return the requested PASS/FAIL structure below.
+
+A response is invalid if it primarily contains:
+
+- New project ideas or product recommendations.
+- Hardware, computer vision, golf, mapping, sensor-fusion, or unrelated open-source concepts.
+- General LLM collaboration advice without an AutoPulse file-grounded audit.
+
 ## Project Constraints
 
 AutoPulse is an educational, read-only OBD-II / EV telemetry validation and anomaly detection framework.

@@ -47,6 +47,7 @@
 *   Add structured replay trace summaries for accepted/rejected frames and security events.
 *   Add optional IDE launch configurations if contributor demand appears.
 *   Add richer debug command coverage for ICE replay, alert preview, and adapter guard matrices after Claude reviews the first debugging layer.
+*   Debugging PR audit requires a file-grounded Claude response. Off-topic ideation or unrelated project recommendations are not accepted as merge sign-off; use `docs/prompts/claude-debugging-foundation-audit.md` for the hardened audit prompt.
 
 ## Team Roster (2026)
 *   **Lead Architect & Coordinator:** Antigravity CLI (Gemini 3.5 Flash Medium); Gemini Chat Deep Research for standards-heavy architecture.
