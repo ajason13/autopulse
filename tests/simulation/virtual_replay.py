@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import logging
 import random
 import threading
 import time
@@ -18,6 +19,8 @@ from typing import Any, Iterable, Mapping, Optional, Protocol
 
 from jsonschema import ValidationError
 
+from autopulse.debugging import get_logger, log_event
+
 from autopulse.data.validator import (
     CommandBlockedException,
     UDSCommandGuard,
@@ -28,6 +31,7 @@ from autopulse.data.validator import (
 )
 
 
+LOGGER = get_logger(__name__)
 US001_REQUIRED_FIELDS = frozenset(
     {
         "timestamp",
@@ -491,9 +495,11 @@ class MockAdapter(OBDAdapter):
 
     def connect(self) -> None:
         self._connected = True
+        log_event(LOGGER, logging.DEBUG, "adapter_connected", adapter="MockAdapter")
 
     def disconnect(self) -> None:
         self._connected = False
+        log_event(LOGGER, logging.DEBUG, "adapter_disconnected", adapter="MockAdapter")
 
     @property
     def security_violations(self) -> list[str]:
@@ -504,7 +510,17 @@ class MockAdapter(OBDAdapter):
             raise RuntimeError("Adapter not connected. Call connect() first.")
         raw = self._next_row()
         self._enforce_security(raw)
-        return self._normalize(raw)
+        packet = self._normalize(raw)
+        log_event(
+            LOGGER,
+            logging.DEBUG,
+            "replay_frame_accepted",
+            adapter="MockAdapter",
+            powertrain_type="ICE",
+            protocol=packet.protocol,
+            vin_hashed=packet.vin_hashed,
+        )
+        return packet
 
     def _next_row(self) -> dict[str, Any]:
         try:
@@ -525,6 +541,13 @@ class MockAdapter(OBDAdapter):
         except Exception as exc:
             formatted = f"0x{service_value:02X}"
             self._security_violations.append(formatted)
+            log_event(
+                LOGGER,
+                logging.ERROR,
+                "replay_security_violation",
+                adapter="MockAdapter",
+                service_id=formatted,
+            )
             raise SecurityViolationError(
                 "SECURITY_VIOLATION_RED_LINE: restricted service "
                 f"{formatted}"
@@ -649,9 +672,11 @@ class EVMockAdapter(OBDAdapter):
 
     def connect(self) -> None:
         self._connected = True
+        log_event(LOGGER, logging.DEBUG, "adapter_connected", adapter="EVMockAdapter")
 
     def disconnect(self) -> None:
         self._connected = False
+        log_event(LOGGER, logging.DEBUG, "adapter_disconnected", adapter="EVMockAdapter")
 
     def fetch_frame(self) -> EVDataPacket:
         if not self._connected:
@@ -660,6 +685,15 @@ class EVMockAdapter(OBDAdapter):
         self._enforce_security(raw)
         packet = self._normalize(raw)
         route_and_validate(packet.to_dict())
+        log_event(
+            LOGGER,
+            logging.DEBUG,
+            "replay_frame_accepted",
+            adapter="EVMockAdapter",
+            powertrain_type="EV",
+            protocol=packet.protocol,
+            vin_hashed=packet.vin_hashed,
+        )
         return packet
 
     def _next_row(self) -> dict[str, Any]:
@@ -687,6 +721,16 @@ class EVMockAdapter(OBDAdapter):
                 )
             except CommandBlockedException as exc:
                 self.events.extend(self.guard.events)
+                log_event(
+                    LOGGER,
+                    logging.ERROR,
+                    "replay_security_violation",
+                    adapter="EVMockAdapter",
+                    code=exc.code,
+                    service_id=row.get("__service_id__"),
+                    sub_function=row.get("__sub_function__"),
+                    vin_hashed=row.get("vin_hashed"),
+                )
                 raise SecurityViolationError(str(exc)) from exc
 
         protocol = str(row.get("protocol") or self._DEFAULT_PROTOCOL)
@@ -704,10 +748,30 @@ class EVMockAdapter(OBDAdapter):
             )
         except CommandBlockedException as exc:
             self.events.extend(self.guard.events)
+            log_event(
+                LOGGER,
+                logging.ERROR,
+                "replay_security_violation",
+                adapter="EVMockAdapter",
+                code=exc.code,
+                active_protocol=self._active_protocol,
+                next_protocol=protocol,
+                vin_hashed=row.get("vin_hashed"),
+            )
             raise SecurityViolationError(str(exc)) from exc
 
         self.guard.events.append("PROTOCOL_TRANSITION_BLOCKED")
         self.events.extend(self.guard.events)
+        log_event(
+            LOGGER,
+            logging.ERROR,
+            "replay_security_violation",
+            adapter="EVMockAdapter",
+            code="PROTOCOL_TRANSITION_BLOCKED",
+            active_protocol=self._active_protocol,
+            next_protocol=protocol,
+            vin_hashed=row.get("vin_hashed"),
+        )
         raise SecurityViolationError(
             "PROTOCOL_TRANSITION_BLOCKED: active EV session protocol changed."
         )
@@ -747,6 +811,14 @@ class EVMockAdapter(OBDAdapter):
                 )
             except CommandBlockedException as exc:
                 self.events.extend(self.guard.events)
+                log_event(
+                    LOGGER,
+                    logging.WARNING,
+                    "replay_security_violation",
+                    adapter="EVMockAdapter",
+                    code=exc.code,
+                    vin_hashed=row.get("vin_hashed"),
+                )
                 raise SecurityViolationError(str(exc)) from exc
 
         packet = EVDataPacket(
@@ -808,6 +880,13 @@ class LogReplayer:
     def start(self, max_frames: Optional[int] = None) -> None:
         self._running = True
         self._adapter.connect()
+        log_event(
+            LOGGER,
+            logging.DEBUG,
+            "replay_started",
+            frequency_hz=self._frequency_hz,
+            max_frames=max_frames,
+        )
         self._thread = threading.Thread(
             target=self._run_loop,
             args=(max_frames,),
@@ -820,6 +899,13 @@ class LogReplayer:
         if self._thread is not None:
             self._thread.join(timeout=5.0)
         self._adapter.disconnect()
+        log_event(
+            LOGGER,
+            logging.DEBUG,
+            "replay_stopped",
+            collected_frames=len(self.frames),
+            errors=len(self.errors),
+        )
 
     def join(self, timeout: float = 10.0) -> None:
         if self._thread is not None:
@@ -862,6 +948,13 @@ class LogReplayer:
             except Exception as exc:
                 with self._lock:
                     self._errors.append(exc)
+                log_event(
+                    LOGGER,
+                    logging.WARNING,
+                    "replay_frame_error",
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
             next_dispatch += interval
             sleep_for = (
                 next_dispatch - time.perf_counter() - SLEEP_GUARD_SECONDS
@@ -883,6 +976,13 @@ def replay_ev_sequence(
     monitoring cannot silently exceed the 1 Hz safety boundary.
     """
     if mode == ReplayMode.BURST and env != "test":
+        log_event(
+            LOGGER,
+            logging.ERROR,
+            "burst_mode_violation",
+            mode=mode,
+            env=env,
+        )
         raise SecurityViolationError("BURST_MODE_VIOLATION")
 
     adapter = EVMockAdapter(JSONLProvider(rows))
@@ -892,6 +992,14 @@ def replay_ev_sequence(
         while True:
             frames.append(adapter.fetch_frame())
     except StopIteration:
+        log_event(
+            LOGGER,
+            logging.DEBUG,
+            "ev_sequence_replayed",
+            mode=mode,
+            env=env,
+            frames=len(frames),
+        )
         return frames
     finally:
         adapter.disconnect()
