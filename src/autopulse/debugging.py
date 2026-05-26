@@ -13,7 +13,6 @@ REDACTED = "[REDACTED]"
 SENSITIVE_KEY_FRAGMENTS = frozenset(
     {
         "raw_vin",
-        "vin",
         "payload_bytes",
         "seed",
         "key",
