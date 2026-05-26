@@ -8,6 +8,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "test:smoke": "playwright test --config playwright.smoke.config.ts",
+    "test:e2e": "playwright test --config playwright.e2e.config.ts",
     "astro": "astro"
   },
   "dependencies": {

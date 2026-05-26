@@ -61,4 +61,4 @@ When you run the `PdMProcessor`, it emits `PdMAlert` objects. These contain:
 - **is_anomaly**: A boolean flag (True if probability > 0.5).
 - **window_summary**: A statistical snapshot of the 60-second sliding window.
 
-Next, explore the [Engine Data Contract](/specs/us-001-engine-data-contract/) to understand the underlying sensor data.
+Next, explore the [Engine Data Contract](../../specs/us-001-engine-data-contract/) to understand the underlying sensor data.
