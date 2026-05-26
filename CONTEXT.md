@@ -41,6 +41,12 @@
 *   **Physics-Based Validation:** RPM must be rejected if > 9,500; Temp rejected if > 140C.
 *   **Sliding Window:** US-003 alerts must use a 60s window (circular buffer) to prevent flicker.
 *   **EV Implementation Boundary:** US-006 is complete within schema/routing/adapter/replay/JSON-LD safety scope. Do not backfill EV-HDF, EV-OSF, or EV anomaly scoring into US-006; those require a separate story and QA plan.
+*   **Debugging Safety:** Debug logs and CLI output must preserve `vin_hashed` only; raw VINs, raw diagnostic payload bytes, seed-key material, tokens, and private workspace links must be redacted or omitted.
+
+## Future Debugging Work
+*   Add structured replay trace summaries for accepted/rejected frames and security events.
+*   Add optional IDE launch configurations if contributor demand appears.
+*   Add richer debug command coverage for ICE replay, alert preview, and adapter guard matrices after Claude reviews the first debugging layer.
 
 ## Team Roster (2026)
 *   **Lead Architect & Coordinator:** Antigravity CLI (Gemini 3.5 Flash Medium); Gemini Chat Deep Research for standards-heavy architecture.

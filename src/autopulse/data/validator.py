@@ -8,9 +8,11 @@ from pathlib import Path
 import time
 from typing import Any
 
+from autopulse.debugging import get_logger, log_event
 from jsonschema import Draft7Validator, FormatChecker
 
 
+LOGGER = get_logger(__name__)
 SCHEMA_PATH = (
     Path(__file__).resolve().parents[3]
     / "schemas"
@@ -98,12 +100,28 @@ def validate_frame(frame: dict[str, Any]) -> None:
     """Validate an engine OBD-II frame against the US-001 JSON schema."""
     _validate_finite_numbers(frame)
     ENGINE_OBD_FRAME_VALIDATOR.validate(frame)
+    log_event(
+        LOGGER,
+        10,
+        "frame_validated",
+        powertrain_type="ICE",
+        protocol=frame.get("protocol"),
+        vin_hashed=frame.get("vin_hashed"),
+    )
 
 
 def validate_ev_frame(frame: dict[str, Any]) -> None:
     """Validate an EV telemetry frame against the US-006 JSON schema."""
     _validate_finite_numbers(frame)
     EV_OBD_FRAME_VALIDATOR.validate(frame)
+    log_event(
+        LOGGER,
+        10,
+        "frame_validated",
+        powertrain_type="EV",
+        protocol=frame.get("protocol"),
+        vin_hashed=frame.get("vin_hashed"),
+    )
 
 
 def route_and_validate(frame: dict[str, Any]) -> str:
@@ -120,28 +138,87 @@ def route_and_validate(frame: dict[str, Any]) -> str:
     protocol = frame.get("protocol")
 
     if powertrain_type not in {"ICE", "EV"}:
+        log_event(
+            LOGGER,
+            30,
+            "routing_rejected",
+            reason="unsupported_powertrain_type",
+            powertrain_type=powertrain_type,
+            protocol=protocol,
+            vin_hashed=frame.get("vin_hashed"),
+        )
         raise RoutingError("powertrain_type must be exactly 'ICE' or 'EV'.")
 
     if powertrain_type == "EV":
         if protocol not in EV_PROTOCOLS:
+            log_event(
+                LOGGER,
+                30,
+                "routing_rejected",
+                reason="ev_protocol_mismatch",
+                powertrain_type=powertrain_type,
+                protocol=protocol,
+                vin_hashed=frame.get("vin_hashed"),
+            )
             raise RoutingError("EV frame protocol is not in the EV enum.")
         validate_ev_frame(frame)
+        log_event(
+            LOGGER,
+            10,
+            "frame_routed",
+            powertrain_type="EV",
+            protocol=protocol,
+            vin_hashed=frame.get("vin_hashed"),
+        )
         return "EV"
 
     if protocol not in ICE_PROTOCOLS:
+        log_event(
+            LOGGER,
+            30,
+            "routing_rejected",
+            reason="ice_protocol_mismatch",
+            powertrain_type=powertrain_type,
+            protocol=protocol,
+            vin_hashed=frame.get("vin_hashed"),
+        )
         raise RoutingError("ICE frame protocol is not in the ICE enum.")
 
     payload = frame.get("payload")
     if not isinstance(payload, dict):
+        log_event(
+            LOGGER,
+            30,
+            "routing_rejected",
+            reason="missing_ice_payload",
+            powertrain_type=powertrain_type,
+            protocol=protocol,
+            vin_hashed=frame.get("vin_hashed"),
+        )
         raise RoutingError("ICE routed frames must contain a payload object.")
 
     validate_frame(payload)
+    log_event(
+        LOGGER,
+        10,
+        "frame_routed",
+        powertrain_type="ICE",
+        protocol=protocol,
+        vin_hashed=frame.get("vin_hashed"),
+    )
     return "ICE"
 
 
 def command_filter(service_id: int) -> None:
     """Block restricted write/control diagnostic services before CAN transmit."""
     if service_id in RESTRICTED_SERVICE_IDS:
+        log_event(
+            LOGGER,
+            40,
+            "security_service_blocked",
+            service_id=f"0x{service_id:02X}",
+            severity="red_line",
+        )
         raise SecurityViolationRedLine(service_id)
 
 
@@ -204,6 +281,13 @@ class UDSCommandGuard:
             next_protocol,
         } == {"ISO_15765_4_DoCAN", "ISO_13400_DoIP"}:
             self.events.append("PROTOCOL_TRANSITION_BLOCKED")
+            log_event(
+                LOGGER,
+                40,
+                "protocol_transition_blocked",
+                active_protocol=active_protocol,
+                next_protocol=next_protocol,
+            )
             raise CommandBlockedException(
                 "PROTOCOL_TRANSITION_BLOCKED",
                 "DoCAN/DoIP transitions require manual reconfiguration.",
@@ -221,6 +305,13 @@ class UDSCommandGuard:
             return
 
         self.events.append("SIGN_CONVENTION_UNDOCUMENTED")
+        log_event(
+            LOGGER,
+            30,
+            "sign_convention_undocumented",
+            motor_speed=motor_speed,
+            reject_undocumented=reject_undocumented,
+        )
         if reject_undocumented:
             raise CommandBlockedException(
                 "SIGN_CONVENTION_UNDOCUMENTED",
@@ -233,6 +324,13 @@ class UDSCommandGuard:
 
         if subfn == 0x06 and (dtc is None or str(dtc) not in self.observed_dtcs):
             self.events.append("SPECULATIVE_DTC_PROBE")
+            log_event(
+                LOGGER,
+                30,
+                "speculative_dtc_probe_blocked",
+                service_id="0x19",
+                sub_function="0x06",
+            )
             raise CommandBlockedException(
                 "SPECULATIVE_DTC_PROBE",
                 "0x19/0x06 requires a previously observed DTC.",
@@ -249,6 +347,13 @@ class UDSCommandGuard:
             < _TESTER_PRESENT_MIN_INTERVAL_SECONDS
         ):
             self.events.append("TESTER_PRESENT_RATE_LIMIT")
+            log_event(
+                LOGGER,
+                30,
+                "tester_present_rate_limited",
+                service_id="0x3E",
+                min_interval_seconds=_TESTER_PRESENT_MIN_INTERVAL_SECONDS,
+            )
             raise CommandBlockedException(
                 "TESTER_PRESENT_RATE_LIMIT",
                 "TesterPresent is limited to once per 4 seconds.",
@@ -266,6 +371,14 @@ class UDSCommandGuard:
         if subfn is not None:
             event = f"{code}:0x{service:02X}/0x{subfn:02X}"
         self.events.append(event)
+        log_event(
+            LOGGER,
+            40,
+            "uds_command_blocked",
+            code=code,
+            service_id=f"0x{service:02X}",
+            sub_function=None if subfn is None else f"0x{subfn:02X}",
+        )
         raise CommandBlockedException(
             code,
             f"blocked service 0x{service:02X}",

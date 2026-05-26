@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import math
 import re
 from types import MappingProxyType
 from typing import Any, Mapping
 from uuid import uuid4
 
+from autopulse.debugging import get_logger, log_event
 
+
+LOGGER = get_logger(__name__)
 _VIN_HASH_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _RAW_VIN_PATTERN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 _VALID_FAILURE_TYPES = frozenset({"HDF", "OSF"})
@@ -81,6 +85,14 @@ class EVTelemetryAlert:
 def serialize_alert(alert: PdMAlert) -> dict[str, Any]:
     """Serialize an internal PdM alert into a JSON-LD observation payload."""
     _validate_alert(alert)
+    log_event(
+        LOGGER,
+        logging.DEBUG,
+        "alert_serialized",
+        powertrain_type="ICE",
+        failure_type=alert.failure_type,
+        vin_hashed=alert.vin_hashed,
+    )
 
     return {
         "@context": dict(_CONTEXT),
@@ -96,6 +108,14 @@ def serialize_alert(alert: PdMAlert) -> dict[str, Any]:
 def serialize_ev_alert(alert: EVTelemetryAlert) -> dict[str, Any]:
     """Serialize a US-006 EV validation/security event into JSON-LD."""
     _validate_ev_alert(alert)
+    log_event(
+        LOGGER,
+        logging.DEBUG,
+        "alert_serialized",
+        powertrain_type=alert.powertrain_type,
+        event_type=alert.event_type,
+        vin_hashed=alert.vin_hashed,
+    )
     return {
         "@context": dict(_CONTEXT),
         "@type": "sosa:Observation",
