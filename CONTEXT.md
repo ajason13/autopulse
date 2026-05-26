@@ -4,13 +4,13 @@
 **Epic 4: Electric Vehicle Integration**
 *   **Status:** Building
 *   **Active Story:** **US-006 (EV Telemetry Data Contract)** - complete; Claude final audit signed off.
-*   **Notion Epic:** [Epic 4: Electric Vehicle Integration](https://www.notion.so/36a834a0c8a681109147c59a919b4335)
-*   **Notion Task:** [US-006 - EV Telemetry Data Contract Research (ZEVonUDS)](https://www.notion.so/36a834a0c8a681329c8ae05946ffae5b)
+*   **Tracking Epic:** Epic 4: Electric Vehicle Integration.
+*   **Tracking Task:** US-006 - EV Telemetry Data Contract Research (ZEVonUDS).
 
 ## Project Vitals
 *   **Mission:** Detect statistical drift in read-only OBD-II telemetry before DTCs appear.
 *   **Governance:** Multi-Agent SDLC (Gemini/Claude/Codex).
-*   **Notion Hub:** [AutoPulse Project Hub](https://www.notion.so/353834a0c8a680cfaab3dd2750ff730d)
+*   **Project Tracker:** AutoPulse Project Hub.
 
 ## Recent Progress (May 2026)
 *   **US-001 (Data Contract):** ✅ **DONE**. Verified by Claude.

@@ -228,3 +228,13 @@ models/*.joblib
 grubby-galaxy/test-results/
 grubby-galaxy/playwright-report/
 grubby-galaxy/blob-report/
+
+# Local AI agent state and private coordination notes
+.antigravitycli/
+.codex/
+.claude/
+.gemini/
+LOCAL_CONTEXT.md
+LOCAL_CONTEXT.*/
+docs/prompts/local/
+docs/prompts/scratch/
