@@ -1,3 +1,88 @@
+# Claude Re-Review Prompt: Future Debugging Ergonomics Blocker Fix
+
+You are Claude Sonnet 4.6 acting as the AutoPulse Lead Auditor.
+
+## Stage
+
+Follow-up re-review for branch `debugging-ergonomics` after Codex addressed your conditional-pass blocker.
+
+This branch has not been merged into `main`. The relevant updated file contents are included below so you can review in Claude Chat without repository access.
+
+## Prior Audit Finding
+
+You previously returned:
+
+> CONDITIONAL PASS — approved for merge with one required pre-merge fix and two tracked follow-up items.
+
+The required blocker was:
+
+> BLOCKER-01 — `_is_red_line_event` counts ICE hex service IDs using broad `event.startswith("0x")`, which could inflate `security_violations` if a future non-red-line event uses a hex-prefixed code.
+
+You required Codex to replace the broad hex-prefix logic with an explicit allowlist/check against restricted red-line service IDs.
+
+## Codex Response
+
+Codex changed `src/autopulse/debug.py`:
+
+- Added `_RED_LINE_HEX = frozenset(f"0x{service_id:02X}" for service_id in RESTRICTED_SERVICE_IDS)`.
+- Changed `_is_red_line_event()` to count an event as red-line only when:
+  - the exception string starts with `"SECURITY_VIOLATION_RED_LINE"`, or
+  - the event starts with `"SECURITY_VIOLATION_RED_LINE"`, or
+  - the event is explicitly in `_RED_LINE_HEX`.
+
+Codex also added focused regression coverage:
+
+- Explicitly documents/asserts that `TESTER_PRESENT_RATE_LIMIT` must not count as a red-line security violation.
+- Adds `preview-alerts` raw VIN-shaped `vin_hashed` rejection coverage.
+- Adds `inspect-guards` no-`NaN`/no-`Infinity` coverage.
+
+## Verification Evidence
+
+Codex ran:
+
+- `python3 -m pytest tests/test_debug_cli_replay.py -q` -> `12 passed`
+- `python3 -m pytest tests/test_debug_cli_replay.py tests/test_debugging.py tests/test_us006_ev_replay_harness.py tests/test_us006_ev_adapter_security.py tests/test_us005_alert_exporter.py tests/test_us003_pdm_algorithms.py tests/test_us004_smoothing.py -q` -> `274 passed`
+- `python3 -m pytest -q` -> `555 passed`
+- `git diff --check` -> passed
+
+## Project Constraints
+
+AutoPulse is an educational, read-only OBD-II anomaly detection framework.
+
+Security and privacy constraints:
+
+- AutoPulse must remain read-only. No writes, clears, controls, routines, security access, diagnostic session escalation, or active probing.
+- Data contracts in `schemas/` are the source of truth.
+- Debug logs and CLI stdout must preserve `vin_hashed` only.
+- Raw VINs, raw diagnostic payload bytes, seed-key material, tokens, secrets, private workspace links, and rejected frame content must not be logged or serialized.
+- `guard_events` must contain safe code strings only, never raw exception messages, frame field values, or DTC values.
+- JSON output must be RFC 8259-safe: no NaN, Infinity, or `-Infinity`.
+
+## Re-Review Request
+
+Please re-review only:
+
+- Whether BLOCKER-01 is fully fixed.
+- Whether the added tests cover the fix and do not introduce privacy/security issues.
+- Whether any new blocker was introduced by the fix.
+- Whether the branch is now approved for merge.
+
+Do not re-litigate already tracked non-blocking follow-ups unless the fix changed their severity.
+
+## Required Output
+
+Return:
+
+1. PASS/FAIL verdict.
+2. Any remaining blockers, ordered by severity.
+3. Any new non-blocking recommendations caused by the fix.
+4. Explicit sign-off language: either "approved for merge" or "not approved for merge."
+
+## Relevant Updated File Contents
+
+### `src/autopulse/debug.py`
+
+```python
 """Developer debugging CLI for sanitized AutoPulse workflows."""
 
 from __future__ import annotations
@@ -475,3 +560,321 @@ if __name__ == "__main__":
 
 
 __all__ = ["main"]
+```
+
+### `tests/test_debug_cli_replay.py`
+
+```python
+"""Debug CLI replay, alert preview, and guard inspection tests."""
+
+from __future__ import annotations
+
+import json
+import logging
+import math
+import re
+
+import pytest
+
+from autopulse.debug import main as debug_main
+from tests.simulation.virtual_replay import NoiseGenerator
+
+
+RAW_VIN = "1HGCM82633A004352"
+
+
+def write_jsonl(tmp_path, rows, filename="rows.jsonl"):
+    path = tmp_path / filename
+    path.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+    return path
+
+
+def ev_row(**overrides):
+    row = {
+        "timestamp": "2026-05-26T10:00:00.000Z",
+        "vin_hashed": "e" * 64,
+        "protocol": "SAE_J1979-3",
+        "battery_soh": 95.0,
+        "battery_soce": 80.0,
+        "battery_temp_avg": 35.0,
+    }
+    row.update(overrides)
+    return row
+
+
+def ice_row(**overrides):
+    row = {
+        "timestamp": "2026-05-26T10:00:00.000Z",
+        "vin_hashed": "c" * 64,
+        "protocol": "J1979_MODE01",
+        "engine_rpm": 1200.0,
+        "vehicle_speed": 30,
+        "coolant_temp": 88.0,
+        "engine_load": 22.0,
+        "stft_bank1": 0.5,
+        "ltft_bank1": -0.5,
+    }
+    row.update(overrides)
+    return row
+
+
+def parsed_stdout(capsys: pytest.CaptureFixture[str]):
+    captured = capsys.readouterr()
+    return json.loads(captured.out), captured
+
+
+def assert_no_raw_vin(stdout: str) -> None:
+    assert RAW_VIN not in stdout
+    assert not re.search(r"\b[A-HJ-NPR-Z0-9]{17}\b", stdout)
+
+
+def test_replay_ev_robust_loop_tallies_schema_rejections_without_crash(tmp_path, capsys):
+    path = write_jsonl(
+        tmp_path,
+        [
+            ev_row(),
+            ev_row(battery_temp_avg=999),
+            ev_row(),
+        ],
+    )
+
+    exit_code = debug_main(["replay-ev", "--jsonl", str(path)])
+
+    summary, captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert summary["ok"] is True
+    assert summary["powertrain_type"] == "EV"
+    assert summary["total_rows"] == 3
+    assert summary["accepted_frames"] == 2
+    assert summary["rejected_frames"] == 1
+    assert summary["security_violations"] == 0
+    assert summary["guard_events"] == []
+    assert_no_raw_vin(captured.out)
+
+
+def test_replay_ev_all_invalid_rows_still_returns_success_summary(tmp_path, capsys):
+    path = write_jsonl(
+        tmp_path,
+        [
+            ev_row(battery_soce=math.nan),
+            ev_row(battery_temp_avg=999),
+            ev_row(battery_soh=None),
+        ],
+    )
+
+    exit_code = debug_main(["replay-ev", "--jsonl", str(path)])
+
+    summary, _captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert summary["ok"] is True
+    assert summary["accepted_frames"] == 0
+    assert summary["rejected_frames"] == 3
+    assert summary["security_violations"] == 0
+
+
+def test_replay_ev_malformed_jsonl_is_pre_loop_error(tmp_path, capsys):
+    path = tmp_path / "bad.jsonl"
+    path.write_text(json.dumps(ev_row()) + "\nnot-json\n", encoding="utf-8")
+
+    exit_code = debug_main(["replay-ev", "--jsonl", str(path)])
+
+    payload, captured = parsed_stdout(capsys)
+    assert exit_code == 1
+    assert payload["ok"] is False
+    assert payload["error_type"] == "ValueError"
+    assert "not-json" not in captured.out
+
+
+def test_replay_ev_security_events_distinguish_red_line_and_rate_limit(tmp_path, capsys):
+    path = write_jsonl(
+        tmp_path,
+        [
+            ev_row(__service_id__="0x2E"),
+            ev_row(__service_id__="0x3E", __now__=10.0),
+            ev_row(__service_id__="0x3E", __now__=12.0),
+            ev_row(),
+        ],
+    )
+
+    exit_code = debug_main(["replay-ev", "--jsonl", str(path)])
+
+    summary, captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert summary["accepted_frames"] == 2
+    assert summary["security_violations"] == 1  # rate-limit must not count as red-line
+    assert "SECURITY_VIOLATION_RED_LINE" in summary["guard_events"]
+    assert "TESTER_PRESENT_RATE_LIMIT" in summary["guard_events"]
+    assert_no_raw_vin(captured.out)
+
+
+def test_replay_ice_robust_loop_tallies_out_of_bounds_rpm(tmp_path, capsys):
+    path = write_jsonl(
+        tmp_path,
+        [
+            ice_row(),
+            ice_row(engine_rpm=9501),
+            ice_row(),
+        ],
+    )
+
+    exit_code = debug_main(["replay-ice", "--jsonl", str(path)])
+
+    summary, _captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert summary["powertrain_type"] == "ICE"
+    assert summary["accepted_frames"] == 2
+    assert summary["rejected_frames"] == 1
+
+
+def test_replay_ice_security_violation_uses_safe_guard_event(tmp_path, capsys):
+    path = write_jsonl(
+        tmp_path,
+        [
+            ice_row(),
+            NoiseGenerator.inject_restricted_service(ice_row(), "0x2E"),
+        ],
+    )
+
+    exit_code = debug_main(["replay-ice", "--jsonl", str(path)])
+
+    summary, captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert summary["accepted_frames"] == 1
+    assert summary["security_violations"] == 1
+    assert summary["guard_events"] == ["0x2E"]
+    assert_no_raw_vin(captured.out)
+
+
+def test_preview_alerts_outputs_hdf_alerts_partitioned_by_vin(tmp_path, capsys):
+    healthy_vin = "a" * 64
+    fault_vin = "b" * 64
+    rows = [
+        ice_row(vin_hashed=healthy_vin, engine_load=5.0),
+        ice_row(
+            vin_hashed=fault_vin,
+            engine_rpm=900.0,
+            engine_load=5.0,
+            coolant_temp=30.0,
+            ambient_temp=25.0,
+        ),
+    ]
+    path = write_jsonl(tmp_path, rows)
+
+    exit_code = debug_main(["preview-alerts", "--jsonl", str(path)])
+
+    alerts, captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert len(alerts) == 1
+    assert alerts[0]["vin_hashed"] == fault_vin
+    assert alerts[0]["failure_type"] == "HDF"
+    assert alerts[0]["failure_probability"] > 0.0
+    assert_no_raw_vin(captured.out)
+
+
+def test_preview_alerts_schema_invalid_frame_does_not_stop_vin_session(tmp_path, capsys):
+    vin = "d" * 64
+    rows = [
+        ice_row(
+            vin_hashed=vin,
+            timestamp="2026-05-26T10:00:00.000Z",
+            engine_rpm=1200.0,
+            engine_load=5.0,
+        ),
+        ice_row(vin_hashed=vin, engine_rpm=99999.0),
+        ice_row(
+            vin_hashed=vin,
+            timestamp="2026-05-26T10:01:00.000Z",
+            engine_rpm=900.0,
+            engine_load=5.0,
+            coolant_temp=30.0,
+            ambient_temp=25.0,
+        ),
+    ]
+    path = write_jsonl(tmp_path, rows)
+
+    exit_code = debug_main(["preview-alerts", "--jsonl", str(path)])
+
+    alerts, _captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert alerts[-1]["vin_hashed"] == vin
+    assert alerts[-1]["failure_probability"] > 0.0
+
+
+def test_preview_alerts_raw_vin_in_vin_hashed_is_rejected_cleanly(tmp_path, capsys):
+    path = write_jsonl(tmp_path, [ice_row(vin_hashed=RAW_VIN)])
+
+    exit_code = debug_main(["preview-alerts", "--jsonl", str(path)])
+
+    alerts, captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert alerts == []
+    assert RAW_VIN not in captured.out
+
+
+def test_inspect_guards_output_contains_expected_safe_constants(capsys):
+    exit_code = debug_main(["inspect-guards"])
+
+    payload, _captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert set(payload) == {
+        "ice_bounds",
+        "ev_bounds",
+        "restricted_service_ids",
+        "ice_protocols",
+        "ev_protocols",
+    }
+    assert payload["restricted_service_ids"] == [
+        "0x04",
+        "0x08",
+        "0x10",
+        "0x14",
+        "0x27",
+        "0x2E",
+        "0x2F",
+        "0x31",
+    ]
+
+
+def test_inspect_guards_output_is_rfc8259_safe(capsys):
+    exit_code = debug_main(["inspect-guards"])
+
+    payload, captured = parsed_stdout(capsys)
+    assert exit_code == 0
+    assert payload["restricted_service_ids"]
+    assert "NaN" not in captured.out
+    assert "Infinity" not in captured.out
+
+
+def test_replay_ev_verbose_logging_omits_rejected_field_values(tmp_path, caplog):
+    path = write_jsonl(tmp_path, [ev_row(battery_temp_avg=999)])
+
+    with caplog.at_level(logging.WARNING, logger="autopulse"):
+        exit_code = debug_main(["--verbose", "replay-ev", "--jsonl", str(path)])
+
+    assert exit_code == 0
+    assert "ValidationError" in caplog.text
+    assert "999" not in caplog.text
+    assert RAW_VIN not in caplog.text
+```
+
+### `CONTEXT.md` Excerpt
+
+```markdown
+*   **Sliding Window:** US-003 alerts must use a 60s window (circular buffer) to prevent flicker.
+*   **EV Implementation Boundary:** US-006 is complete within schema/routing/adapter/replay/JSON-LD safety scope. Do not backfill EV-HDF, EV-OSF, or EV anomaly scoring into US-006; those require a separate story and QA plan.
+*   **Debugging Safety:** Debug logs and CLI output must preserve `vin_hashed` only; raw VINs, raw diagnostic payload bytes, seed-key material, tokens, and private workspace links must be redacted or omitted.
+
+## Future Debugging Work
+*   Claude signed off on the first debugging layer on 2026-05-25: approved to remain on `main` with no blockers.
+*   Branch `debugging-audit-followup` addresses Claude's recommended privacy hardening: precise VIN-key redaction, scoped verbose logging, and adversarial debug-output tests.
+*   Future Debugging Ergonomics implementation is in progress on branch `debugging-ergonomics`.
+    *   Implemented robust row-by-row `replay-ev` and `replay-ice` summaries with accepted/rejected/security tallies and sanitized guard events.
+    *   Implemented `preview-alerts` with per-`vin_hashed` ICE `PdMProcessor` sessions and sanitized alert output.
+    *   Implemented `inspect-guards` JSON output for ICE bounds, EV bounds, restricted service IDs, and supported protocol constants.
+    *   Added shared `.vscode/launch.json` debug profiles for contributor CLI workflows.
+    *   Verification: targeted debug/replay/PdM/alert suites `274 passed`; full suite `555 passed`.
+    *   Claude implementation audit returned a conditional pass on 2026-05-26 with one required pre-merge fix: replace broad hex-prefix security counting with an explicit restricted-service allowlist. Codex applied the fix and added focused regression coverage.
+    *   Tracked follow-ups: move replay adapter classes/constants out of `tests.simulation` into a source package; promote alert exporter sanitization/VIN helpers to public API; clarify committed `.vscode/launch.json` as shared contributor convenience using local `tmp/` sample files.
+*   Track forward-looking validation-error logging risk if future schemas add string-valued fields.
+*   Debugging PR audit requires a file-grounded Claude response. Off-topic ideation or unrelated project recommendations are not accepted as merge sign-off; use `docs/prompts/claude-debugging-foundation-audit.md` for the hardened audit prompt.
+```

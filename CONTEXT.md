@@ -46,9 +46,15 @@
 ## Future Debugging Work
 *   Claude signed off on the first debugging layer on 2026-05-25: approved to remain on `main` with no blockers.
 *   Branch `debugging-audit-followup` addresses Claude's recommended privacy hardening: precise VIN-key redaction, scoped verbose logging, and adversarial debug-output tests.
-*   Add structured replay trace summaries for accepted/rejected frames and security events, including non-fatal adapter guard events in `replay-ev` CLI output.
-*   Add optional IDE launch configurations if contributor demand appears.
-*   Add richer debug command coverage for ICE replay, alert preview, and adapter guard matrices.
+*   Future Debugging Ergonomics implementation is in progress on branch `debugging-ergonomics` / PR #31.
+    *   Implemented robust row-by-row `replay-ev` and `replay-ice` summaries with accepted/rejected/security tallies and sanitized guard events.
+    *   Implemented `preview-alerts` with per-`vin_hashed` ICE `PdMProcessor` sessions and sanitized alert output.
+    *   Implemented `inspect-guards` JSON output for ICE bounds, EV bounds, restricted service IDs, and supported protocol constants.
+    *   Added shared `.vscode/launch.json` debug profiles for contributor CLI workflows.
+    *   Verification: targeted debug/replay/PdM/alert suites `274 passed`; full suite `555 passed`.
+    *   Claude implementation audit returned a conditional pass on 2026-05-26 with one required pre-merge fix: replace broad hex-prefix security counting with an explicit restricted-service allowlist. Codex applied the fix and added focused regression coverage.
+    *   Claude re-review passed on 2026-05-26: BLOCKER-01 fixed, all missing tests present, no new blockers, approved for merge to `main`.
+    *   Tracked follow-ups: move replay adapter classes/constants out of `tests.simulation` into a source package; promote alert exporter sanitization/VIN helpers to public API; clarify committed `.vscode/launch.json` as shared contributor convenience using local `tmp/` sample files.
 *   Track forward-looking validation-error logging risk if future schemas add string-valued fields.
 *   Debugging PR audit requires a file-grounded Claude response. Off-topic ideation or unrelated project recommendations are not accepted as merge sign-off; use `docs/prompts/claude-debugging-foundation-audit.md` for the hardened audit prompt.
 
