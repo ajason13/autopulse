@@ -65,7 +65,8 @@
 
 ## Future Debugging Work
 *   Claude signed off on the first debugging layer on 2026-05-25: approved to remain on `main` with no blockers.
-*   Branch `debugging-audit-followup` addresses Claude's recommended privacy hardening: precise VIN-key redaction, scoped verbose logging, and adversarial debug-output tests.
+*   Claude signed off on the debugging audit follow-up on 2026-05-26: PR #30 is approved to remain on `main` with no blockers.
+    *   Completed follow-up scope: precise VIN-key redaction, scoped verbose logging, and adversarial debug-output tests.
 *   Future Debugging Ergonomics merged via PR #31.
     *   Implemented robust row-by-row `replay-ev` and `replay-ice` summaries with accepted/rejected/security tallies and sanitized guard events.
     *   Implemented `preview-alerts` with per-`vin_hashed` ICE `PdMProcessor` sessions and sanitized alert output.
