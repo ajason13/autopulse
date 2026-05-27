@@ -1,0 +1,70 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "AutoPulse: Validate ICE Frame",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "autopulse.debug",
+      "args": [
+        "validate-frame",
+        "--powertrain",
+        "ICE",
+        "--file",
+        "${workspaceFolder}/tmp/ice-frame.json"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "AutoPulse: Validate EV Frame",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "autopulse.debug",
+      "args": [
+        "validate-frame",
+        "--powertrain",
+        "EV",
+        "--file",
+        "${workspaceFolder}/tmp/ev-frame.json"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "AutoPulse: Replay EV JSONL",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "autopulse.debug",
+      "args": [
+        "--verbose",
+        "replay-ev",
+        "--jsonl",
+        "${workspaceFolder}/tmp/ev-replay.jsonl"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "AutoPulse: Preview ICE Alerts",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "autopulse.debug",
+      "args": [
+        "preview-alerts",
+        "--jsonl",
+        "${workspaceFolder}/tmp/ice-replay.jsonl"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal"
+    }
+  ]
+}
