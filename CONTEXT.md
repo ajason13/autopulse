@@ -44,9 +44,12 @@
 *   **Debugging Safety:** Debug logs and CLI output must preserve `vin_hashed` only; raw VINs, raw diagnostic payload bytes, seed-key material, tokens, and private workspace links must be redacted or omitted.
 
 ## Future Debugging Work
-*   Add structured replay trace summaries for accepted/rejected frames and security events.
+*   Claude signed off on the first debugging layer on 2026-05-25: approved to remain on `main` with no blockers.
+*   Branch `debugging-audit-followup` addresses Claude's recommended privacy hardening: precise VIN-key redaction, scoped verbose logging, and adversarial debug-output tests.
+*   Add structured replay trace summaries for accepted/rejected frames and security events, including non-fatal adapter guard events in `replay-ev` CLI output.
 *   Add optional IDE launch configurations if contributor demand appears.
-*   Add richer debug command coverage for ICE replay, alert preview, and adapter guard matrices after Claude reviews the first debugging layer.
+*   Add richer debug command coverage for ICE replay, alert preview, and adapter guard matrices.
+*   Track forward-looking validation-error logging risk if future schemas add string-valued fields.
 *   Debugging PR audit requires a file-grounded Claude response. Off-topic ideation or unrelated project recommendations are not accepted as merge sign-off; use `docs/prompts/claude-debugging-foundation-audit.md` for the hardened audit prompt.
 
 ## Team Roster (2026)

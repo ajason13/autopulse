@@ -167,7 +167,12 @@ def _write_json(payload: dict[str, Any]) -> None:
 def _configure_logging(verbose: bool) -> None:
     if not verbose:
         return
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+    logger = logging.getLogger("autopulse")
+    logger.setLevel(logging.DEBUG)
+    if not any(getattr(handler, "_autopulse_debug_cli", False) for handler in logger.handlers):
+        handler = logging.StreamHandler(sys.stderr)
+        handler._autopulse_debug_cli = True  # type: ignore[attr-defined]
+        logger.addHandler(handler)
 
 
 if __name__ == "__main__":
