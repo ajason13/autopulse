@@ -103,3 +103,24 @@ def test_cli_rejects_runtime_log_path_traversal_before_opening_file(tmp_path):
         )
 
     assert not log_path.exists()
+
+
+def test_cli_rejects_output_path_traversal(tmp_path):
+    output_path = tmp_path / ".." / "capture.jsonl"
+
+    with pytest.raises(SystemExit):
+        cli.main(
+            [
+                "--adapter-port",
+                "/dev/tty.fake",
+                "--vin-hashed",
+                VIN_HASHED,
+                "--output-path",
+                str(output_path),
+                "--max-samples",
+                "1",
+                "--dry-run",
+            ]
+        )
+
+    assert not output_path.exists()

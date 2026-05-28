@@ -58,7 +58,7 @@
 
 ## Active Work: Real Vehicle Read-Only Smoke Harness
 *   **Goal:** Prepare the minimum safe bridge from replay-only tooling to a first stationary vehicle check.
-*   **Current status:** Implementation is complete on branch `vehicle-smoke-harness-planning`; waiting on Claude implementation audit before PR/merge or any real vehicle connection.
+*   **Current status:** Claude returned conditional pass on 2026-05-28; Codex fixed both merge blockers and is waiting on Claude re-review before PR/merge or any real vehicle connection.
 *   **Required scope before any vehicle connection:**
     *   Define a stationary-only read-only harness with no write-capable UDS services and no clearing/resetting/coding behavior.
     *   Use a strict safe PID allowlist, max 1 Hz polling, explicit sample limits, and operator stop/failure behavior.
@@ -72,7 +72,9 @@
     *   Added `src/autopulse/live/` with live adapter boundary, harness loop, and CLI.
     *   Added `docs/operator-checklists/real-vehicle-smoke-harness.md`.
     *   Added Claude implementation-audit prompt: `docs/prompts/claude-real-vehicle-smoke-harness-implementation-audit.md`.
-    *   Verification: `tests/live` -> `24 passed`; targeted live/logging/debug/security suite -> `67 passed`; full suite -> `595 passed`.
+    *   Initial verification: `tests/live` -> `24 passed`; targeted live/logging/debug/security suite -> `67 passed`; full suite -> `595 passed`.
+    *   Conditional-pass fixes: `output_path` traversal rejected; harness-level security abort integration tests added for `SecurityViolationRedLine` and `CommandBlockedException`.
+    *   Post-fix verification: `tests/live` -> `27 passed`; targeted live/logging/debug/security suite -> `70 passed`; full suite -> `598 passed`.
 *   **Go/no-go:** still no-go for real vehicle until implementation tests pass and Claude performs a second implementation audit.
 *   **Out of scope for this task:** road testing, unattended monitoring, write-capable services, performance claims, production-grade adapter support, and new anomaly algorithms.
 

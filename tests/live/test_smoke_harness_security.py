@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from autopulse.data.validator import SecurityViolationRedLine
+from autopulse.data.validator import CommandBlockedException, SecurityViolationRedLine
 from autopulse.live.adapter import LIVE_ALLOWED_PIDS, LiveOBDAdapter, PIDNotAllowedError
+from autopulse.live.harness import SAFETY_ABORT_EXIT, SmokeHarnessConfig, run_smoke_capture
+from tests.live.fakes import FakeICEAdapter, frame_values
 
 
 @pytest.mark.parametrize("service_id", [0x2E, 0x31, 0x10, 0x27, 0x2F, 0x08, 0x04])
@@ -40,3 +42,32 @@ def test_live_package_does_not_import_tests_namespace():
             elif isinstance(node, ast.Import):
                 for alias in node.names:
                     assert not alias.name.startswith("tests")
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        SecurityViolationRedLine(0x2E),
+        CommandBlockedException("SECURITY_VIOLATION_RED_LINE", "blocked"),
+    ],
+)
+def test_security_violation_during_capture_aborts_and_disconnects(
+    tmp_path,
+    fake_vin_hashed,
+    exc,
+):
+    adapter = FakeICEAdapter([frame_values()], fetch_error=exc)
+    config = SmokeHarnessConfig(
+        adapter_port="/dev/tty.fake",
+        vin_hashed=fake_vin_hashed,
+        output_path=tmp_path / "capture.jsonl",
+        max_samples=1,
+        confirmed_stationary=True,
+    )
+
+    summary = run_smoke_capture(config, adapter, sleep=lambda _: None)
+
+    assert summary.exit_code == SAFETY_ABORT_EXIT
+    assert summary.safety_abort is True
+    assert adapter.disconnected is True
+    assert (tmp_path / "capture.jsonl").read_text(encoding="utf-8") == ""

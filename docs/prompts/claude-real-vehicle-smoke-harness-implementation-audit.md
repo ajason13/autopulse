@@ -15,6 +15,19 @@ Review the completed implementation for merge readiness and for eventual station
 - Initial `python3 -m pytest -q` had one unrelated 10 Hz timing tolerance failure in `tests/test_us002_virtual_replay_harness.py::TestLogReplayer10Hz::test_10hz_no_interval_exceeds_tolerance`; isolated rerun passed.
 - Final `python3 -m pytest -q` -> `595 passed`
 
+After Claude conditional-pass findings were addressed:
+
+- `python3 -m pytest tests/live -q` -> `27 passed`
+- `python3 -m pytest tests/live tests/test_runtime_logging.py tests/test_debug_cli_replay.py tests/test_us006_ev_adapter_security.py -q` -> `70 passed`
+- `python3 -m pytest -q` -> `598 passed`
+
+## Conditional-Pass Fixes Applied
+
+- `validate_config()` now rejects `output_path` values containing `..`.
+- CLI regression coverage confirms `--output-path` traversal is rejected before file creation.
+- Harness-level integration coverage now verifies `SecurityViolationRedLine` during capture returns `SAFETY_ABORT_EXIT`, disconnects, and leaves JSONL empty.
+- Recommended `CommandBlockedException` capture-abort coverage was also added.
+
 ## Review Goals
 
 Evaluate:

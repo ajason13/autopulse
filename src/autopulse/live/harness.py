@@ -112,6 +112,8 @@ def validate_config(config: SmokeHarnessConfig) -> None:
         raise ValueError("max_samples must be positive.")
     if config.max_duration_seconds is not None and config.max_duration_seconds <= 0:
         raise ValueError("max_duration_seconds must be positive.")
+    if ".." in config.output_path.parts:
+        raise ValueError("output_path must not contain '..'.")
     if not config.output_path.parent.exists():
         raise FileNotFoundError("output_path parent directory does not exist.")
     if not config.dry_run and not config.confirmed_stationary:
