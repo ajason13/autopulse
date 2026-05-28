@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 
 import pytest
 
 from autopulse import debug as debug_module
 from autopulse.debug import main as debug_main
-from autopulse.debugging import REDACTED, log_event, sanitize_debug_value
+from autopulse.debugging import (
+    REDACTED,
+    log_event,
+    sanitize_debug_value,
+)
 from autopulse.data.validator import command_filter
 
 
@@ -66,6 +71,15 @@ def test_sanitize_debug_value_redacts_raw_vin_in_lists() -> None:
     assert sanitized == ["normal", REDACTED, f"seen {REDACTED}"]
 
 
+def test_sanitize_debug_value_can_redact_malformed_vin_hashed() -> None:
+    sanitized = sanitize_debug_value(
+        {"vin_hashed": "not-a-sha256-hash"},
+        validate_vin_shape=True,
+    )
+
+    assert sanitized["vin_hashed"] == REDACTED
+
+
 def test_log_event_emits_json_without_raw_vin_or_payload_bytes(caplog: pytest.LogCaptureFixture) -> None:
     logger = logging.getLogger("tests.debugging")
 
@@ -89,6 +103,35 @@ def test_log_event_emits_json_without_raw_vin_or_payload_bytes(caplog: pytest.Lo
     assert payload["service_id"] == "0x2E"
     assert RAW_VIN not in caplog.text
     assert "2E F4 B2 00" not in caplog.text
+
+
+def test_log_event_redacts_malformed_vin_hashed(caplog: pytest.LogCaptureFixture) -> None:
+    logger = logging.getLogger("tests.debugging.vin_hash")
+
+    with caplog.at_level(logging.DEBUG, logger="tests.debugging.vin_hash"):
+        log_event(
+            logger,
+            logging.DEBUG,
+            "debug_test",
+            vin_hashed="not-a-sha256-hash",
+        )
+
+    payload = json.loads(caplog.records[0].message)
+    assert payload["vin_hashed"] == REDACTED
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_log_event_rejects_non_finite_numbers(
+    value: float,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    logger = logging.getLogger("tests.debugging.non_finite")
+
+    with caplog.at_level(logging.DEBUG, logger="tests.debugging.non_finite"):
+        with pytest.raises(ValueError, match="non-finite"):
+            log_event(logger, logging.DEBUG, "debug_test", score=value)
+
+    assert len(caplog.records) == 0
 
 
 def test_log_event_redacts_secret_and_token(caplog: pytest.LogCaptureFixture) -> None:

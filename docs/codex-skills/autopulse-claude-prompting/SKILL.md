@@ -22,6 +22,7 @@ Use this skill when preparing Claude review or audit prompts for AutoPulse.
 
 - Do not assume Claude Chat can access GitHub, Notion, or local files.
 - Include enough context for a standalone review.
+- When the user asks for a Claude Chat prompt with relevant file contents, embed the full relevant files when practical. If a file is too large, include exact function/class/test excerpts and explicitly list what was omitted.
 - Avoid dumping huge diffs when a file/function summary plus targeted snippets will do.
 - Use exact branch/PR names when Claude Code has repo access.
 

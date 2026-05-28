@@ -1,11 +1,11 @@
 # AutoPulse Project Context
 
 ## Current Epic
-**Epic 4: Electric Vehicle Integration**
-*   **Status:** Building
-*   **Active Story:** **US-006 (EV Telemetry Data Contract)** - complete; Claude final audit signed off.
-*   **Tracking Epic:** Epic 4: Electric Vehicle Integration.
-*   **Tracking Task:** US-006 - EV Telemetry Data Contract Research (ZEVonUDS).
+**Runtime Hardening & Observability**
+*   **Status:** Ready to merge.
+*   **Active Story:** **Runtime Logging Hardening** - define and implement structured runtime logging policy before real-vehicle work.
+*   **Tracking Epic:** AutoPulse Project Hub / Tasks.
+*   **Tracking Task:** Runtime logging hardening.
 
 ## Project Vitals
 *   **Mission:** Detect statistical drift in read-only OBD-II telemetry before DTCs appear.
@@ -35,6 +35,11 @@
     *   Claude final audit passed with no blockers; US-006 is approved for merge.
     *   Follow-up branch `us-006-audit-followup` addressed documentation/test-harness observations and records future work.
     *   Future EV work: ReplayMode enum, bounded UDS event buffers, sustained SOCE-cliff helper, low-temperature charging anomaly research, and separate EV-HDF/EV-OSF story.
+*   **Future Debugging Ergonomics:** ✅ **DONE**.
+    *   Merged via PR #31.
+    *   Added robust `replay-ev`/`replay-ice` summaries, `preview-alerts`, `inspect-guards`, and shared VS Code launch profiles.
+    *   Verification: targeted debug/replay/PdM/alert suites `274 passed`; full suite `555 passed`.
+    *   Claude re-review passed on 2026-05-26 with no blockers; approved for merge.
 
 ## Active Constraints
 *   **Read-Only Only:** Any write-access logic is a P0 security violation.
@@ -42,11 +47,39 @@
 *   **Sliding Window:** US-003 alerts must use a 60s window (circular buffer) to prevent flicker.
 *   **EV Implementation Boundary:** US-006 is complete within schema/routing/adapter/replay/JSON-LD safety scope. Do not backfill EV-HDF, EV-OSF, or EV anomaly scoring into US-006; those require a separate story and QA plan.
 *   **Debugging Safety:** Debug logs and CLI output must preserve `vin_hashed` only; raw VINs, raw diagnostic payload bytes, seed-key material, tokens, and private workspace links must be redacted or omitted.
+*   **Live Vehicle Boundary:** Do not start real-vehicle polling or road tests until a read-only smoke harness, runtime logging policy, safe PID allowlist, and operator safety checklist exist.
+
+## Active Work: Runtime Logging Hardening
+*   **Goal:** Promote current debug logging into a documented runtime observability layer that is safe for future live capture and useful for replay/debug operations.
+*   **Current status:** Claude implementation audit passed on 2026-05-27 with no blockers; branch `logging-hardening` is ready for PR/merge.
+*   **Current scope:**
+    *   Define log event taxonomy for validation, replay, guard, alert preview, adapter lifecycle, and future live-capture events.
+    *   Add logging configuration helpers for console/file handlers without changing root logger behavior.
+    *   Preserve existing `sanitize_debug_value()` and `log_event()` privacy guarantees across all new output paths.
+    *   Add tests for log redaction, RFC 8259-safe payloads, level filtering, optional file output, and no rejected-frame leakage.
+    *   Document retention/rotation expectations and local operator guidance.
+*   **Implementation notes:**
+    *   `log_event()` now rejects `NaN`, `Infinity`, and `-Infinity` before emission and serializes with `allow_nan=False`.
+    *   Runtime logging validates `vin_hashed` shape before preserving it; malformed values are redacted.
+    *   `autopulse.logging_config.configure_logging()` provides explicit console/file handler setup on the `autopulse` logger only, with no root logger mutation and no default file path.
+    *   Rotation is deferred pending an explicit retention policy.
+    *   Policy document: `docs/runtime-logging-policy.md`.
+*   **Claude audit follow-ups (non-blocking):**
+    *   Add comments documenting the sanitize-before-finite-validation order and debug CLI handler formatter interaction.
+    *   Add follow-up tests for reverse handler configuration order, nested non-finite values, deeply nested file parent creation, append-mode multi-event file logging, and `console=False`/no-file no-op configuration.
+    *   Consider making `JsonLineFormatter` private to reduce external coupling.
+    *   Document the existing `_serialize_preview_alert()` defense-in-depth order: `_validate_vin_hash()` runs before `sanitize_debug_value()`.
+*   **Out of scope for this task:** direct vehicle polling, physical adapter integration, road testing, new OBD/UDS services, and EV anomaly scoring.
+
+## Deferred: Real Vehicle Read-Only Smoke Harness
+*   Defer until there is vehicle access and logging hardening is complete.
+*   Future scope should be stationary-only, read-only, max 1 Hz, known safe PID allowlist, no raw VIN storage, replay-compatible JSONL capture, and explicit stop/failure behavior.
 
 ## Future Debugging Work
 *   Claude signed off on the first debugging layer on 2026-05-25: approved to remain on `main` with no blockers.
-*   Branch `debugging-audit-followup` addresses Claude's recommended privacy hardening: precise VIN-key redaction, scoped verbose logging, and adversarial debug-output tests.
-*   Future Debugging Ergonomics implementation is in progress on branch `debugging-ergonomics` / PR #31.
+*   Claude signed off on the debugging audit follow-up on 2026-05-26: PR #30 is approved to remain on `main` with no blockers.
+    *   Completed follow-up scope: precise VIN-key redaction, scoped verbose logging, and adversarial debug-output tests.
+*   Future Debugging Ergonomics merged via PR #31.
     *   Implemented robust row-by-row `replay-ev` and `replay-ice` summaries with accepted/rejected/security tallies and sanitized guard events.
     *   Implemented `preview-alerts` with per-`vin_hashed` ICE `PdMProcessor` sessions and sanitized alert output.
     *   Implemented `inspect-guards` JSON output for ICE bounds, EV bounds, restricted service IDs, and supported protocol constants.
