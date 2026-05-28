@@ -2,7 +2,7 @@
 
 ## Current Epic
 **Runtime Hardening & Observability**
-*   **Status:** Preparing next story.
+*   **Status:** QA planning.
 *   **Active Story:** **Real Vehicle Read-Only Smoke Harness** - define a stationary, read-only, operator-safe first-vehicle check.
 *   **Tracking Epic:** AutoPulse Project Hub / Tasks.
 *   **Tracking Task:** Real vehicle read-only smoke harness.
@@ -58,7 +58,7 @@
 
 ## Active Work: Real Vehicle Read-Only Smoke Harness
 *   **Goal:** Prepare the minimum safe bridge from replay-only tooling to a first stationary vehicle check.
-*   **Current status:** Planning should start next; do not connect to a vehicle until this story has a Claude-reviewed QA plan and implementation.
+*   **Current status:** Draft spec exists in `docs/specs/real-vehicle-read-only-smoke-harness.md`; Claude adversarial QA planning prompt is being prepared on branch `vehicle-smoke-harness-planning`.
 *   **Required scope before any vehicle connection:**
     *   Define a stationary-only read-only harness with no write-capable UDS services and no clearing/resetting/coding behavior.
     *   Use a strict safe PID allowlist, max 1 Hz polling, explicit sample limits, and operator stop/failure behavior.
@@ -66,6 +66,8 @@
     *   Route runtime events through `autopulse.logging_config.configure_logging()` and `log_event()`.
     *   Add adapter-open failure handling, unsupported-protocol behavior, and no-vehicle/no-ECU negative tests.
     *   Add an operator checklist covering stationary setup, ignition state, battery condition, adapter selection, and stop conditions.
+*   **Architecture constraint:** Live vehicle code must live in a source package with a clear adapter boundary. Do not reuse `tests.simulation` replay classes as the live adapter implementation.
+*   **Draft decision:** First smoke harness should be ICE-only unless Claude identifies a safe EV-specific DID allowlist and source-documentation requirement.
 *   **Out of scope for this task:** road testing, unattended monitoring, write-capable services, performance claims, production-grade adapter support, and new anomaly algorithms.
 
 ## Runtime Logging Follow-Ups
