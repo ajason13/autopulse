@@ -2,7 +2,7 @@
 
 ## Current Epic
 **Runtime Hardening & Observability**
-*   **Status:** Preparing next story.
+*   **Status:** QA planning.
 *   **Active Story:** **Real Vehicle Read-Only Smoke Harness** - define a stationary, read-only, operator-safe first-vehicle check.
 *   **Tracking Epic:** AutoPulse Project Hub / Tasks.
 *   **Tracking Task:** Real vehicle read-only smoke harness.
@@ -58,7 +58,7 @@
 
 ## Active Work: Real Vehicle Read-Only Smoke Harness
 *   **Goal:** Prepare the minimum safe bridge from replay-only tooling to a first stationary vehicle check.
-*   **Current status:** Planning should start next; do not connect to a vehicle until this story has a Claude-reviewed QA plan and implementation.
+*   **Current status:** Claude re-review passed on 2026-05-28 after Codex fixed both merge blockers; branch is ready for PR/merge.
 *   **Required scope before any vehicle connection:**
     *   Define a stationary-only read-only harness with no write-capable UDS services and no clearing/resetting/coding behavior.
     *   Use a strict safe PID allowlist, max 1 Hz polling, explicit sample limits, and operator stop/failure behavior.
@@ -66,6 +66,17 @@
     *   Route runtime events through `autopulse.logging_config.configure_logging()` and `log_event()`.
     *   Add adapter-open failure handling, unsupported-protocol behavior, and no-vehicle/no-ECU negative tests.
     *   Add an operator checklist covering stationary setup, ignition state, battery condition, adapter selection, and stop conditions.
+*   **Architecture constraint:** Live vehicle code must live in a source package with a clear adapter boundary. Do not reuse `tests.simulation` replay classes as the live adapter implementation.
+*   **Claude QA decisions:** first harness is ICE-only; VIN reads are blocked; operator must supply precomputed `vin_hashed`; all six ICE PIDs are required per accepted sample; `vehicle_speed > 0` is a safety abort; `command_filter()` must run before every outgoing request; max 1 Hz cadence and finite sample/duration limits are enforced in code.
+*   **Implementation notes:**
+    *   Added `src/autopulse/live/` with live adapter boundary, harness loop, and CLI.
+    *   Added `docs/operator-checklists/real-vehicle-smoke-harness.md`.
+    *   Added Claude implementation-audit prompt: `docs/prompts/claude-real-vehicle-smoke-harness-implementation-audit.md`.
+    *   Initial verification: `tests/live` -> `24 passed`; targeted live/logging/debug/security suite -> `67 passed`; full suite -> `595 passed`.
+    *   Conditional-pass fixes: `output_path` traversal rejected; harness-level security abort integration tests added for `SecurityViolationRedLine` and `CommandBlockedException`.
+    *   Post-fix verification: `tests/live` -> `27 passed`; targeted live/logging/debug/security suite -> `70 passed`; full suite -> `598 passed`.
+    *   Claude re-review verdict: PASS; merge recommended.
+*   **Go/no-go:** conditional go only after merge, and only for a stationary smoke test following `docs/operator-checklists/real-vehicle-smoke-harness.md`; EV DID capture, ambient-temp PID `0x46`, road testing, and unattended operation remain prohibited.
 *   **Out of scope for this task:** road testing, unattended monitoring, write-capable services, performance claims, production-grade adapter support, and new anomaly algorithms.
 
 ## Runtime Logging Follow-Ups
