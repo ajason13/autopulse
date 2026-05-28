@@ -2,7 +2,7 @@
 
 ## Current Epic
 **Runtime Hardening & Observability**
-*   **Status:** Planning.
+*   **Status:** In development.
 *   **Active Story:** **Runtime Logging Hardening** - define and implement structured runtime logging policy before real-vehicle work.
 *   **Tracking Epic:** AutoPulse Project Hub / Tasks.
 *   **Tracking Task:** Runtime logging hardening.
@@ -51,12 +51,19 @@
 
 ## Active Work: Runtime Logging Hardening
 *   **Goal:** Promote current debug logging into a documented runtime observability layer that is safe for future live capture and useful for replay/debug operations.
+*   **Current status:** Claude returned a conditional adversarial QA plan on 2026-05-27 and approved implementation after resolving the non-finite-number and malformed-`vin_hashed` logging blockers.
 *   **Current scope:**
     *   Define log event taxonomy for validation, replay, guard, alert preview, adapter lifecycle, and future live-capture events.
     *   Add logging configuration helpers for console/file handlers without changing root logger behavior.
     *   Preserve existing `sanitize_debug_value()` and `log_event()` privacy guarantees across all new output paths.
     *   Add tests for log redaction, RFC 8259-safe payloads, level filtering, optional file output, and no rejected-frame leakage.
     *   Document retention/rotation expectations and local operator guidance.
+*   **Implementation notes:**
+    *   `log_event()` now rejects `NaN`, `Infinity`, and `-Infinity` before emission and serializes with `allow_nan=False`.
+    *   Runtime logging validates `vin_hashed` shape before preserving it; malformed values are redacted.
+    *   `autopulse.logging_config.configure_logging()` provides explicit console/file handler setup on the `autopulse` logger only, with no root logger mutation and no default file path.
+    *   Rotation is deferred pending an explicit retention policy.
+    *   Policy document: `docs/runtime-logging-policy.md`.
 *   **Out of scope for this task:** direct vehicle polling, physical adapter integration, road testing, new OBD/UDS services, and EV anomaly scoring.
 
 ## Deferred: Real Vehicle Read-Only Smoke Harness
