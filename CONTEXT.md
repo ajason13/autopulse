@@ -2,10 +2,10 @@
 
 ## Current Epic
 **Runtime Hardening & Observability**
-*   **Status:** Ready to merge.
-*   **Active Story:** **Runtime Logging Hardening** - define and implement structured runtime logging policy before real-vehicle work.
+*   **Status:** Preparing next story.
+*   **Active Story:** **Real Vehicle Read-Only Smoke Harness** - define a stationary, read-only, operator-safe first-vehicle check.
 *   **Tracking Epic:** AutoPulse Project Hub / Tasks.
-*   **Tracking Task:** Runtime logging hardening.
+*   **Tracking Task:** Real vehicle read-only smoke harness.
 
 ## Project Vitals
 *   **Mission:** Detect statistical drift in read-only OBD-II telemetry before DTCs appear.
@@ -40,6 +40,13 @@
     *   Added robust `replay-ev`/`replay-ice` summaries, `preview-alerts`, `inspect-guards`, and shared VS Code launch profiles.
     *   Verification: targeted debug/replay/PdM/alert suites `274 passed`; full suite `555 passed`.
     *   Claude re-review passed on 2026-05-26 with no blockers; approved for merge.
+*   **Runtime Logging Hardening:** ✅ **DONE**.
+    *   Merged via PR #32.
+    *   Added `autopulse.logging_config.configure_logging()` for explicit console/file runtime logging on the `autopulse` logger only.
+    *   Hardened `log_event()` with `vin_hashed` shape validation, non-finite number rejection, and `allow_nan=False` serialization.
+    *   Added `docs/runtime-logging-policy.md`.
+    *   Verification: focused logging/debug CLI suite `40 passed`; expanded security/replay/exporter suite `153 passed`; full suite `571 passed`.
+    *   Claude implementation audit passed on 2026-05-27 with no blockers; approved for merge.
 
 ## Active Constraints
 *   **Read-Only Only:** Any write-access logic is a P0 security violation.
@@ -49,31 +56,24 @@
 *   **Debugging Safety:** Debug logs and CLI output must preserve `vin_hashed` only; raw VINs, raw diagnostic payload bytes, seed-key material, tokens, and private workspace links must be redacted or omitted.
 *   **Live Vehicle Boundary:** Do not start real-vehicle polling or road tests until a read-only smoke harness, runtime logging policy, safe PID allowlist, and operator safety checklist exist.
 
-## Active Work: Runtime Logging Hardening
-*   **Goal:** Promote current debug logging into a documented runtime observability layer that is safe for future live capture and useful for replay/debug operations.
-*   **Current status:** Claude implementation audit passed on 2026-05-27 with no blockers; branch `logging-hardening` is ready for PR/merge.
-*   **Current scope:**
-    *   Define log event taxonomy for validation, replay, guard, alert preview, adapter lifecycle, and future live-capture events.
-    *   Add logging configuration helpers for console/file handlers without changing root logger behavior.
-    *   Preserve existing `sanitize_debug_value()` and `log_event()` privacy guarantees across all new output paths.
-    *   Add tests for log redaction, RFC 8259-safe payloads, level filtering, optional file output, and no rejected-frame leakage.
-    *   Document retention/rotation expectations and local operator guidance.
-*   **Implementation notes:**
-    *   `log_event()` now rejects `NaN`, `Infinity`, and `-Infinity` before emission and serializes with `allow_nan=False`.
-    *   Runtime logging validates `vin_hashed` shape before preserving it; malformed values are redacted.
-    *   `autopulse.logging_config.configure_logging()` provides explicit console/file handler setup on the `autopulse` logger only, with no root logger mutation and no default file path.
-    *   Rotation is deferred pending an explicit retention policy.
-    *   Policy document: `docs/runtime-logging-policy.md`.
-*   **Claude audit follow-ups (non-blocking):**
+## Active Work: Real Vehicle Read-Only Smoke Harness
+*   **Goal:** Prepare the minimum safe bridge from replay-only tooling to a first stationary vehicle check.
+*   **Current status:** Planning should start next; do not connect to a vehicle until this story has a Claude-reviewed QA plan and implementation.
+*   **Required scope before any vehicle connection:**
+    *   Define a stationary-only read-only harness with no write-capable UDS services and no clearing/resetting/coding behavior.
+    *   Use a strict safe PID allowlist, max 1 Hz polling, explicit sample limits, and operator stop/failure behavior.
+    *   Persist only replay-compatible sanitized JSONL; do not store raw VINs or raw diagnostic payload bytes.
+    *   Route runtime events through `autopulse.logging_config.configure_logging()` and `log_event()`.
+    *   Add adapter-open failure handling, unsupported-protocol behavior, and no-vehicle/no-ECU negative tests.
+    *   Add an operator checklist covering stationary setup, ignition state, battery condition, adapter selection, and stop conditions.
+*   **Out of scope for this task:** road testing, unattended monitoring, write-capable services, performance claims, production-grade adapter support, and new anomaly algorithms.
+
+## Runtime Logging Follow-Ups
+*   Non-blocking items from Claude's PR #32 audit:
     *   Add comments documenting the sanitize-before-finite-validation order and debug CLI handler formatter interaction.
     *   Add follow-up tests for reverse handler configuration order, nested non-finite values, deeply nested file parent creation, append-mode multi-event file logging, and `console=False`/no-file no-op configuration.
     *   Consider making `JsonLineFormatter` private to reduce external coupling.
     *   Document the existing `_serialize_preview_alert()` defense-in-depth order: `_validate_vin_hash()` runs before `sanitize_debug_value()`.
-*   **Out of scope for this task:** direct vehicle polling, physical adapter integration, road testing, new OBD/UDS services, and EV anomaly scoring.
-
-## Deferred: Real Vehicle Read-Only Smoke Harness
-*   Defer until there is vehicle access and logging hardening is complete.
-*   Future scope should be stationary-only, read-only, max 1 Hz, known safe PID allowlist, no raw VIN storage, replay-compatible JSONL capture, and explicit stop/failure behavior.
 
 ## Future Debugging Work
 *   Claude signed off on the first debugging layer on 2026-05-25: approved to remain on `main` with no blockers.
