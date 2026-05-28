@@ -1,6 +1,6 @@
 # Real Vehicle Read-Only Smoke Harness
 
-Status: Draft for Claude adversarial QA planning.
+Status: Claude QA plan received; implementation in progress.
 
 ## Purpose
 
@@ -11,7 +11,7 @@ This story does not authorize road testing, unattended monitoring, write-capable
 ## Preconditions
 
 - Runtime Logging Hardening is merged and Claude-approved.
-- A Claude-reviewed adversarial QA plan exists for this story.
+- A Claude-reviewed adversarial QA plan exists for this story: `docs/qa/real-vehicle-read-only-smoke-harness-qa-plan.md`.
 - The implementation has source-level live adapter boundaries; it must not depend on `tests.simulation` replay classes for live behavior.
 - Operator checklist exists before any vehicle connection.
 - The first vehicle check is stationary only.
@@ -48,6 +48,14 @@ The expected implementation should be a narrow CLI or module that:
 - validates each normalized frame through existing schema validators;
 - writes one sanitized replay-compatible JSON object per accepted sample.
 
+Required CLI inputs:
+
+- `--adapter-port`
+- `--vin-hashed`
+- `--output-path`
+- `--max-samples` or `--max-duration-seconds`
+- runtime preflight confirmation, or `--dry-run`
+
 ## Candidate ICE PID Allowlist
 
 Initial stationary ICE smoke capture should use only SAE J1979 Mode 01 current-data PIDs already represented by the US-001 schema:
@@ -63,7 +71,7 @@ Optional future PID:
 
 - `0x46`: ambient air temperature, only if adapter support is explicit and absence is handled without failing the capture.
 
-The first implementation may be ICE-only. EV live capture should remain out of scope unless Claude and the project owner explicitly approve a separate EV-safe DID allowlist and source documentation requirement.
+The first implementation is ICE-only. EV live capture remains out of scope unless Claude and the project owner explicitly approve a separate EV-safe DID allowlist and source documentation requirement.
 
 ## Output Contract
 
@@ -81,6 +89,8 @@ Output must:
 
 Rejected samples may increment counters and produce sanitized runtime log events, but must not be serialized as raw rejected-frame content.
 
+The first implementation requires all six required ICE PIDs for an accepted sample. Partial samples are rejected and counted.
+
 ## Failure Behavior
 
 The harness should fail closed on:
@@ -93,8 +103,11 @@ The harness should fail closed on:
 - non-finite numeric values;
 - any write-capable service request;
 - raw VIN exposure attempt.
+- vehicle speed greater than zero during stationary capture.
 
 Operator interrupt should stop polling, close the adapter, flush logs/output, and return a sanitized summary.
+
+Safety abort exit code is `2`. Adapter failure exit code is `3`.
 
 ## Explicit Non-Goals
 
@@ -105,14 +118,16 @@ Operator interrupt should stop polling, close the adapter, flush logs/output, an
 - DTC clearing.
 - UDS active diagnostics.
 - EV DID polling.
+- VIN reads or VIN hashing from a raw VIN.
 - Anomaly scoring changes.
 - Production fleet support.
 - Adapter auto-discovery beyond an explicit user-provided port.
 
-## Open Questions For Claude
+## Claude QA Decisions
 
-- Should the first smoke harness require all six ICE PIDs per sample, or allow partial samples with rejection counters?
-- Should vehicle speed be required to remain `0` for stationary safety, or merely logged/validated?
-- Should the harness hash a user-supplied VIN, reject VIN reads entirely, or require the user to provide a precomputed `vin_hashed`?
-- Which adapter library is acceptable for the first implementation, and how should tests fake it without touching hardware?
-- Should adapter configuration live under `src/autopulse/live/`, `src/autopulse/adapters/`, or another package to avoid the current `tests.simulation` dependency?
+- Require complete six-PID samples for accepted frames.
+- Abort if `vehicle_speed > 0`.
+- Do not read VIN. Require a precomputed lowercase 64-character SHA-256 `vin_hashed`.
+- Put live implementation under `src/autopulse/live/`.
+- Use a fake adapter in tests; tests must not require hardware or import `python-obd`.
+- Run a second Claude implementation audit before any real vehicle connection.

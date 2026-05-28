@@ -58,7 +58,7 @@
 
 ## Active Work: Real Vehicle Read-Only Smoke Harness
 *   **Goal:** Prepare the minimum safe bridge from replay-only tooling to a first stationary vehicle check.
-*   **Current status:** Draft spec exists in `docs/specs/real-vehicle-read-only-smoke-harness.md`; Claude adversarial QA planning prompt is being prepared on branch `vehicle-smoke-harness-planning`.
+*   **Current status:** Implementation is complete on branch `vehicle-smoke-harness-planning`; waiting on Claude implementation audit before PR/merge or any real vehicle connection.
 *   **Required scope before any vehicle connection:**
     *   Define a stationary-only read-only harness with no write-capable UDS services and no clearing/resetting/coding behavior.
     *   Use a strict safe PID allowlist, max 1 Hz polling, explicit sample limits, and operator stop/failure behavior.
@@ -67,7 +67,13 @@
     *   Add adapter-open failure handling, unsupported-protocol behavior, and no-vehicle/no-ECU negative tests.
     *   Add an operator checklist covering stationary setup, ignition state, battery condition, adapter selection, and stop conditions.
 *   **Architecture constraint:** Live vehicle code must live in a source package with a clear adapter boundary. Do not reuse `tests.simulation` replay classes as the live adapter implementation.
-*   **Draft decision:** First smoke harness should be ICE-only unless Claude identifies a safe EV-specific DID allowlist and source-documentation requirement.
+*   **Claude QA decisions:** first harness is ICE-only; VIN reads are blocked; operator must supply precomputed `vin_hashed`; all six ICE PIDs are required per accepted sample; `vehicle_speed > 0` is a safety abort; `command_filter()` must run before every outgoing request; max 1 Hz cadence and finite sample/duration limits are enforced in code.
+*   **Implementation notes:**
+    *   Added `src/autopulse/live/` with live adapter boundary, harness loop, and CLI.
+    *   Added `docs/operator-checklists/real-vehicle-smoke-harness.md`.
+    *   Added Claude implementation-audit prompt: `docs/prompts/claude-real-vehicle-smoke-harness-implementation-audit.md`.
+    *   Verification: `tests/live` -> `24 passed`; targeted live/logging/debug/security suite -> `67 passed`; full suite -> `595 passed`.
+*   **Go/no-go:** still no-go for real vehicle until implementation tests pass and Claude performs a second implementation audit.
 *   **Out of scope for this task:** road testing, unattended monitoring, write-capable services, performance claims, production-grade adapter support, and new anomaly algorithms.
 
 ## Runtime Logging Follow-Ups
