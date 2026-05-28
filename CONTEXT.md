@@ -2,7 +2,7 @@
 
 ## Current Epic
 **Runtime Hardening & Observability**
-*   **Status:** Awaiting Claude final audit.
+*   **Status:** Ready to merge.
 *   **Active Story:** **Runtime Logging Hardening** - define and implement structured runtime logging policy before real-vehicle work.
 *   **Tracking Epic:** AutoPulse Project Hub / Tasks.
 *   **Tracking Task:** Runtime logging hardening.
@@ -51,7 +51,7 @@
 
 ## Active Work: Runtime Logging Hardening
 *   **Goal:** Promote current debug logging into a documented runtime observability layer that is safe for future live capture and useful for replay/debug operations.
-*   **Current status:** Implementation is committed on branch `logging-hardening` (`5d898b3`) and waiting on Claude final audit using `docs/prompts/claude-runtime-logging-hardening-implementation-audit.md`.
+*   **Current status:** Claude implementation audit passed on 2026-05-27 with no blockers; branch `logging-hardening` is ready for PR/merge.
 *   **Current scope:**
     *   Define log event taxonomy for validation, replay, guard, alert preview, adapter lifecycle, and future live-capture events.
     *   Add logging configuration helpers for console/file handlers without changing root logger behavior.
@@ -64,6 +64,11 @@
     *   `autopulse.logging_config.configure_logging()` provides explicit console/file handler setup on the `autopulse` logger only, with no root logger mutation and no default file path.
     *   Rotation is deferred pending an explicit retention policy.
     *   Policy document: `docs/runtime-logging-policy.md`.
+*   **Claude audit follow-ups (non-blocking):**
+    *   Add comments documenting the sanitize-before-finite-validation order and debug CLI handler formatter interaction.
+    *   Add follow-up tests for reverse handler configuration order, nested non-finite values, deeply nested file parent creation, append-mode multi-event file logging, and `console=False`/no-file no-op configuration.
+    *   Consider making `JsonLineFormatter` private to reduce external coupling.
+    *   Document the existing `_serialize_preview_alert()` defense-in-depth order: `_validate_vin_hash()` runs before `sanitize_debug_value()`.
 *   **Out of scope for this task:** direct vehicle polling, physical adapter integration, road testing, new OBD/UDS services, and EV anomaly scoring.
 
 ## Deferred: Real Vehicle Read-Only Smoke Harness
