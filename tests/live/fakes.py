@@ -58,6 +58,7 @@ class FakeICEAdapter:
         self.queries.append(pid)
         if self.fetch_error is not None:
             raise self.fetch_error
+        # The smoke harness currently requires exactly six PIDs per frame cycle.
         frame_index = self.query_count // 6
         self.query_count += 1
         frame = self.frames[frame_index]

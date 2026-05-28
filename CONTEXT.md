@@ -58,7 +58,7 @@
 
 ## Active Work: Real Vehicle Read-Only Smoke Harness
 *   **Goal:** Prepare the minimum safe bridge from replay-only tooling to a first stationary vehicle check.
-*   **Current status:** Claude returned conditional pass on 2026-05-28; Codex fixed both merge blockers and is waiting on Claude re-review before PR/merge or any real vehicle connection.
+*   **Current status:** Claude re-review passed on 2026-05-28 after Codex fixed both merge blockers; branch is ready for PR/merge.
 *   **Required scope before any vehicle connection:**
     *   Define a stationary-only read-only harness with no write-capable UDS services and no clearing/resetting/coding behavior.
     *   Use a strict safe PID allowlist, max 1 Hz polling, explicit sample limits, and operator stop/failure behavior.
@@ -75,7 +75,8 @@
     *   Initial verification: `tests/live` -> `24 passed`; targeted live/logging/debug/security suite -> `67 passed`; full suite -> `595 passed`.
     *   Conditional-pass fixes: `output_path` traversal rejected; harness-level security abort integration tests added for `SecurityViolationRedLine` and `CommandBlockedException`.
     *   Post-fix verification: `tests/live` -> `27 passed`; targeted live/logging/debug/security suite -> `70 passed`; full suite -> `598 passed`.
-*   **Go/no-go:** still no-go for real vehicle until implementation tests pass and Claude performs a second implementation audit.
+    *   Claude re-review verdict: PASS; merge recommended.
+*   **Go/no-go:** conditional go only after merge, and only for a stationary smoke test following `docs/operator-checklists/real-vehicle-smoke-harness.md`; EV DID capture, ambient-temp PID `0x46`, road testing, and unattended operation remain prohibited.
 *   **Out of scope for this task:** road testing, unattended monitoring, write-capable services, performance claims, production-grade adapter support, and new anomaly algorithms.
 
 ## Runtime Logging Follow-Ups
