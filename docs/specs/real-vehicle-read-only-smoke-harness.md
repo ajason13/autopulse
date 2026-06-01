@@ -1,6 +1,6 @@
 # Real Vehicle Read-Only Smoke Harness
 
-Status: Claude QA plan received; implementation in progress.
+Status: Implemented and merged via PR #33. Claude re-review passed; stationary ICE smoke test is conditionally allowed only under the operator checklist.
 
 ## Purpose
 
@@ -11,7 +11,7 @@ This story does not authorize road testing, unattended monitoring, write-capable
 ## Preconditions
 
 - Runtime Logging Hardening is merged and Claude-approved.
-- A Claude-reviewed adversarial QA plan exists for this story: `docs/qa/real-vehicle-read-only-smoke-harness-qa-plan.md`.
+- Claude-reviewed adversarial QA and implementation re-review exist for this story.
 - The implementation has source-level live adapter boundaries; it must not depend on `tests.simulation` replay classes for live behavior.
 - Operator checklist exists before any vehicle connection.
 - The first vehicle check is stationary only.
@@ -130,4 +130,4 @@ Safety abort exit code is `2`. Adapter failure exit code is `3`.
 - Do not read VIN. Require a precomputed lowercase 64-character SHA-256 `vin_hashed`.
 - Put live implementation under `src/autopulse/live/`.
 - Use a fake adapter in tests; tests must not require hardware or import `python-obd`.
-- Run a second Claude implementation audit before any real vehicle connection.
+- Claude implementation audit and fix re-review passed before merge.

@@ -2,10 +2,10 @@
 
 ## Current Epic
 **Runtime Hardening & Observability**
-*   **Status:** QA planning.
-*   **Active Story:** **Real Vehicle Read-Only Smoke Harness** - define a stationary, read-only, operator-safe first-vehicle check.
+*   **Status:** Ready for supervised stationary smoke test.
+*   **Active Story:** **Stationary Vehicle Smoke Test Execution** - run the first read-only vehicle check under the approved checklist.
 *   **Tracking Epic:** AutoPulse Project Hub / Tasks.
-*   **Tracking Task:** Real vehicle read-only smoke harness.
+*   **Tracking Task:** First stationary read-only vehicle smoke test.
 
 ## Project Vitals
 *   **Mission:** Detect statistical drift in read-only OBD-II telemetry before DTCs appear.
@@ -47,6 +47,14 @@
     *   Added `docs/runtime-logging-policy.md`.
     *   Verification: focused logging/debug CLI suite `40 passed`; expanded security/replay/exporter suite `153 passed`; full suite `571 passed`.
     *   Claude implementation audit passed on 2026-05-27 with no blockers; approved for merge.
+*   **Real Vehicle Read-Only Smoke Harness:** ✅ **DONE**.
+    *   Merged via PR #33.
+    *   Added `src/autopulse/live/` with an ICE-only stationary read-only smoke harness, live adapter boundary, and CLI.
+    *   Requires explicit adapter port, precomputed `vin_hashed`, output path, finite capture limit, and stationary confirmation.
+    *   Enforces exact six-PID Mode 01 allowlist, request-side `command_filter()`, max 1 Hz cadence, `vehicle_speed > 0` safety abort, sanitized runtime logging, and replay-compatible JSONL output.
+    *   Added `docs/operator-checklists/real-vehicle-smoke-harness.md`.
+    *   Verification: `tests/live` -> `27 passed`; targeted live/logging/debug/security suite -> `70 passed`; full suite -> `598 passed`.
+    *   Claude re-review passed on 2026-05-28 with no blockers; approved for merge.
 
 ## Active Constraints
 *   **Read-Only Only:** Any write-access logic is a P0 security violation.
@@ -54,30 +62,19 @@
 *   **Sliding Window:** US-003 alerts must use a 60s window (circular buffer) to prevent flicker.
 *   **EV Implementation Boundary:** US-006 is complete within schema/routing/adapter/replay/JSON-LD safety scope. Do not backfill EV-HDF, EV-OSF, or EV anomaly scoring into US-006; those require a separate story and QA plan.
 *   **Debugging Safety:** Debug logs and CLI output must preserve `vin_hashed` only; raw VINs, raw diagnostic payload bytes, seed-key material, tokens, and private workspace links must be redacted or omitted.
-*   **Live Vehicle Boundary:** Do not start real-vehicle polling or road tests until a read-only smoke harness, runtime logging policy, safe PID allowlist, and operator safety checklist exist.
+*   **Live Vehicle Boundary:** Only the approved stationary ICE smoke test is conditionally allowed after dry-run and checklist completion. Road testing, unattended operation, EV DID capture, ambient-temp PID `0x46`, VIN reads, DTC clearing, UDS writes, routines, security access, and session escalation remain prohibited.
 
-## Active Work: Real Vehicle Read-Only Smoke Harness
-*   **Goal:** Prepare the minimum safe bridge from replay-only tooling to a first stationary vehicle check.
-*   **Current status:** Claude re-review passed on 2026-05-28 after Codex fixed both merge blockers; branch is ready for PR/merge.
-*   **Required scope before any vehicle connection:**
-    *   Define a stationary-only read-only harness with no write-capable UDS services and no clearing/resetting/coding behavior.
-    *   Use a strict safe PID allowlist, max 1 Hz polling, explicit sample limits, and operator stop/failure behavior.
-    *   Persist only replay-compatible sanitized JSONL; do not store raw VINs or raw diagnostic payload bytes.
-    *   Route runtime events through `autopulse.logging_config.configure_logging()` and `log_event()`.
-    *   Add adapter-open failure handling, unsupported-protocol behavior, and no-vehicle/no-ECU negative tests.
-    *   Add an operator checklist covering stationary setup, ignition state, battery condition, adapter selection, and stop conditions.
-*   **Architecture constraint:** Live vehicle code must live in a source package with a clear adapter boundary. Do not reuse `tests.simulation` replay classes as the live adapter implementation.
-*   **Claude QA decisions:** first harness is ICE-only; VIN reads are blocked; operator must supply precomputed `vin_hashed`; all six ICE PIDs are required per accepted sample; `vehicle_speed > 0` is a safety abort; `command_filter()` must run before every outgoing request; max 1 Hz cadence and finite sample/duration limits are enforced in code.
-*   **Implementation notes:**
-    *   Added `src/autopulse/live/` with live adapter boundary, harness loop, and CLI.
-    *   Added `docs/operator-checklists/real-vehicle-smoke-harness.md`.
-    *   Added Claude implementation-audit prompt: `docs/prompts/claude-real-vehicle-smoke-harness-implementation-audit.md`.
-    *   Initial verification: `tests/live` -> `24 passed`; targeted live/logging/debug/security suite -> `67 passed`; full suite -> `595 passed`.
-    *   Conditional-pass fixes: `output_path` traversal rejected; harness-level security abort integration tests added for `SecurityViolationRedLine` and `CommandBlockedException`.
-    *   Post-fix verification: `tests/live` -> `27 passed`; targeted live/logging/debug/security suite -> `70 passed`; full suite -> `598 passed`.
-    *   Claude re-review verdict: PASS; merge recommended.
-*   **Go/no-go:** conditional go only after merge, and only for a stationary smoke test following `docs/operator-checklists/real-vehicle-smoke-harness.md`; EV DID capture, ambient-temp PID `0x46`, road testing, and unattended operation remain prohibited.
-*   **Out of scope for this task:** road testing, unattended monitoring, write-capable services, performance claims, production-grade adapter support, and new anomaly algorithms.
+## Active Work: Stationary Vehicle Smoke Test Execution
+*   **Goal:** Execute the first real-vehicle check using the merged read-only smoke harness.
+*   **Current status:** Conditional go after PR #33 merge, subject to the operator checklist and dry-run.
+*   **Required order:**
+    *   Install/confirm `python-obd` in the operator environment.
+    *   Precompute `vin_hashed` outside AutoPulse; do not read VIN from the vehicle.
+    *   Run `PYTHONPATH=src python3 -m autopulse.live.cli ... --dry-run` and confirm exit code `0`.
+    *   Confirm stationary setup from `docs/operator-checklists/real-vehicle-smoke-harness.md`.
+    *   Run a bounded capture such as `--max-samples 60 --confirmed-stationary`.
+    *   Monitor `stderr`; abort on unexpected warning/error events.
+*   **Still prohibited:** road testing, unattended monitoring, write-capable services, DTC clearing, UDS active diagnostics, EV DID capture, ambient-temp PID `0x46`, VIN reads, performance claims, and production-grade adapter support.
 
 ## Runtime Logging Follow-Ups
 *   Non-blocking items from Claude's PR #32 audit:
