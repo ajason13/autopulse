@@ -19,6 +19,7 @@ export default defineConfig({
 					label: 'Guides',
 					items: [
 						{ label: 'Getting Started', slug: 'guides/getting-started' },
+						{ label: 'Stationary Smoke Test', slug: 'guides/stationary-smoke-test' },
 						{ label: 'Example Guide', slug: 'guides/example' },
 					],
 				},

@@ -10,6 +10,7 @@ AutoPulse is designed as a modular, read-only analysis pipeline optimized for ed
 ```mermaid
 graph TD
     A[OBD-II Data Source / Virtual Log] --> B[Data Ingestion Layer]
+    L[Stationary Live Smoke Harness] --> B
     B --> C{Validation & Security}
     C -- Validated Frame --> D[Temporal Analysis Layer]
     C -- Security Violation --> E[Drop & Log]
@@ -28,6 +29,8 @@ graph TD
 
 ### 1. Data Ingestion & Validation
 Defined in the [US-001 Data Contract](../../specs/us-001-engine-data-contract/), this layer ensures that incoming sensor data satisfies physical constraints (e.g., RPM < 9,500) and security mandates (e.g., VIN hashing). It normalizes raw automotive signals into a consistent JSON format.
+
+The [Stationary Smoke Test](../../guides/stationary-smoke-test/) is the only approved live-vehicle path. It is ICE-only, bounded, read-only, and requires a precomputed `vin_hashed`; it does not read VIN or perform active diagnostics.
 
 ### 2. Temporal Analysis (Stateful)
 Because a single OBD frame lacks context, AutoPulse maintains a **60-second sliding window** using high-performance circular buffers. This layer computes rolling statistics (min, max, mean, std_dev) used for drift detection.

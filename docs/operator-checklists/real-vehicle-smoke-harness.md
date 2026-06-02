@@ -1,6 +1,6 @@
 # Real Vehicle Smoke Harness Operator Checklist
 
-Status: Required before any stationary vehicle smoke test. A second Claude implementation audit is still required before use.
+Status: Required before any stationary vehicle smoke test. Claude re-review passed after PR #33; use is conditional on this checklist and a successful dry-run.
 
 ## Preflight
 
