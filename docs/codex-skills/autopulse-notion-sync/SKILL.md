@@ -41,7 +41,7 @@ Include exact dates for relative statuses when useful.
 
 - Branch and PR number when available.
 - Test command and result summary.
-- Claude/Gemini verdict if supplied.
+- Claude/Codex verdict if supplied.
 - Human decisions that resolved blockers.
 - Future work that should not be implemented in the current story.
 

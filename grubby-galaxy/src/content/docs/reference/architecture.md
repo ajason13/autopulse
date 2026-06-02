@@ -45,8 +45,7 @@ The [US-003 Algorithms](../anomaly-detection/) evaluate the temporal state again
 
 AutoPulse is governed by a 2026 Multi-LLM engineering model. Each layer of the architecture is owned by a specialized agent:
 
-- **Lead Architect (Gemini)**: Defines specifications, research, and mathematical thresholds.
-- **Lead Developer (Codex)**: Owns implementation, performance optimization, and repository hygiene.
+- **Lead Architect & Developer (Codex)**: Defines specifications, research, mathematical thresholds, implementation, performance optimization, and repository hygiene.
 - **Lead Auditor (Claude)**: Manages adversarial QA, edge-case generation, and final safety sign-off.
 
 This separation of concerns ensures that no feature is implemented without architectural alignment and rigorous adversarial verification.

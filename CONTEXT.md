@@ -9,7 +9,7 @@
 
 ## Project Vitals
 *   **Mission:** Detect statistical drift in read-only OBD-II telemetry before DTCs appear.
-*   **Governance:** Multi-Agent SDLC (Gemini/Claude/Codex).
+*   **Governance:** Multi-Agent SDLC (Codex/Claude). Codex now owns architecture, coordination, implementation, repository memory, and Notion sync; Claude remains the independent auditor.
 *   **Project Tracker:** AutoPulse Project Hub.
 
 ## Recent Progress (May 2026)
@@ -56,6 +56,12 @@
     *   Verification: `tests/live` -> `27 passed`; targeted live/logging/debug/security suite -> `70 passed`; full suite -> `598 passed`.
     *   Claude re-review passed on 2026-05-28 with no blockers; approved for merge.
 
+## Governance Update (June 2026)
+*   Codex has taken over the Lead Architect & Coordinator role formerly held by Antigravity CLI / Gemini because Gemini CLI rate limits made it unreliable for day-to-day coordination.
+*   Codex now owns research framing, standards assumptions, architecture decisions, implementation, repo hygiene, `CONTEXT.md`, and Notion synchronization.
+*   Claude remains the Lead Auditor and required adversarial QA/sign-off owner for material changes.
+*   Historical Gemini research and prompts remain provenance for completed work unless a new Codex-owned spec supersedes them.
+
 ## Active Constraints
 *   **Read-Only Only:** Any write-access logic is a P0 security violation.
 *   **Physics-Based Validation:** RPM must be rejected if > 9,500; Temp rejected if > 140C.
@@ -100,6 +106,5 @@
 *   Debugging PR audit requires a file-grounded Claude response. Off-topic ideation or unrelated project recommendations are not accepted as merge sign-off; use `docs/prompts/claude-debugging-foundation-audit.md` for the hardened audit prompt.
 
 ## Team Roster (2026)
-*   **Lead Architect & Coordinator:** Antigravity CLI (Gemini 3.5 Flash Medium); Gemini Chat Deep Research for standards-heavy architecture.
-*   **Lead Developer:** Codex (GPT-5.5)
+*   **Lead Architect, Coordinator & Developer:** Codex (GPT-5.5)
 *   **Lead Auditor:** Claude (Sonnet 4.6)
