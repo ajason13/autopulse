@@ -35,7 +35,7 @@ Use this skill before opening or updating an AutoPulse PR.
 - ...
 ```
 
-Add an `Audit` section when Claude/Gemini review is part of the merge gate.
+Add an `Audit` section when Claude/Codex review is part of the merge gate.
 
 ## AutoPulse-Specific Notes
 

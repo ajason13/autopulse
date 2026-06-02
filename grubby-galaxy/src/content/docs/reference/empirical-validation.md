@@ -43,5 +43,5 @@ US-006 remains limited to schema validation, routing isolation, adapter safety g
 ---
 
 **Status**: ✅ Verified Compliant
-**Approver**: Lead Researcher & Architect (Gemini)
+**Approver**: Lead Researcher & Architect (Gemini, historical); current architecture owner is Codex.
 **Date**: May 2026.

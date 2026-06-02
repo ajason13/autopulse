@@ -6,9 +6,9 @@ AutoPulse is governed by a 2026 Multi-LLM engineering team model. Each agent has
 
 ## Team Structure
 
-### Lead Architect & Coordinator: Antigravity CLI
+### Lead Architect, Coordinator & Developer: Codex / GPT-5.5
 
-Model: `Gemini 3.5 Flash` (Medium)
+Model: `Codex/GPT-5.5`
 
 Primary ownership:
 
@@ -17,20 +17,6 @@ Primary ownership:
 - Architecture decisions, system boundaries, and technical specifications.
 - Data contract intent for OBD-II ingestion, replay, anomaly scoring, and reporting.
 - Workflow coordination, managing `CONTEXT.md` active memory, and Notion automation.
-
-Required outputs:
-
-- Technical design notes in `docs/`.
-- Standards compliance notes for any PID, service, or protocol assumption.
-- Architecture review before implementation begins on new subsystems.
-- Handoff prompts and verification coordination.
-
-### Lead Developer: Codex / GPT-5.5
-
-Model: `Codex/GPT-5.5`
-
-Primary ownership:
-
 - Implementation across `src/`, `schemas/`, and test-support code.
 - Terminal operations, local tooling, package management, and repository hygiene.
 - Docker, infrastructure, CI, developer setup, and reproducible execution.
@@ -38,6 +24,10 @@ Primary ownership:
 
 Required outputs:
 
+- Technical design notes in `docs/`.
+- Standards compliance notes for any PID, service, or protocol assumption.
+- Architecture review before implementation begins on new subsystems.
+- Handoff prompts and verification coordination.
 - Focused implementation commits.
 - Local verification evidence from the required test suites.
 - Clear operational notes for environment, Docker, and automation changes.
@@ -61,22 +51,21 @@ Required outputs:
 
 ## Handshake Protocol
 
-The transition from research/QA to implementation is automated via the Antigravity CLI (Gemini 3.5 Flash) to eliminate "clipboard lag."
+The transition from research/QA to implementation is now coordinated by Codex. Gemini/Antigravity is no longer the active coordinator because of rate-limit instability; historical Gemini research artifacts remain valid as provenance unless superseded by new Codex-owned specifications.
 
-1. **Automated Handoff:** Antigravity CLI packages the Lead Auditor's test suite and the architectural specifications into a structured prompt.
-2. **Direct Execution:** Antigravity CLI triggers Codex implementation using `codex exec "[PROMPT]"`.
+1. **Codex-Owned Specification:** Codex records the architecture intent, standards assumptions, security boundaries, and implementation scope in repository artifacts before material implementation begins.
+2. **Auditor Challenge:** Claude produces or reviews the adversarial QA plan and identifies blockers for material schema, replay, analysis, live-vehicle, exporter, or security-sensitive changes.
 3. **Verification:** 
     - Codex runs the full auditor-generated test suite.
     - The test run must report a 100% pass rate.
     - Codex records the verification command and result in the implementation summary.
-4. **Final Sign-off:** Any failing test must be fixed or escalated back to the Lead Architect/Coordinator and Lead Auditor.
+4. **Final Sign-off:** Any failing test must be fixed or escalated back to the Lead Architect/Coordinator/Developer and Lead Auditor.
 
-No exception is allowed for convenience or partial local confidence. If the auditor test suite cannot be executed via `codex exec` or fails, Codex must not commit to `main`.
+No exception is allowed for convenience or partial local confidence. If the auditor test suite cannot be executed or fails, Codex must not commit to `main`.
 
 ## Operating Rules
 
-- The Lead Architect defines what should be built and why.
-- The Lead Developer defines how approved work is implemented and operated.
+- Codex defines what should be built and why, then implements and operates the approved work.
 - The Lead Auditor defines how the implementation is challenged and whether it is fit to merge.
 - Security red lines around read-only OBD-II behavior take precedence over feature delivery.
 - Data contracts in `schemas/` are the source of truth for ingestion and validation.
