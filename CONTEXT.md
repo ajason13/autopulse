@@ -72,9 +72,11 @@
 
 ## Active Work: Stationary Vehicle Smoke Test Execution
 *   **Goal:** Execute the first real-vehicle check using the merged read-only smoke harness.
-*   **Current status:** Conditional go after PR #33 merge, subject to the operator checklist and dry-run.
+*   **Current status:** Safe connection settings patch in progress on `live-adapter-safe-connection-settings`; do not run a live vehicle capture until this patch receives Claude review/sign-off and merges.
+*   **Connection hardening scope:** `LiveOBDAdapter` now forces `python-obd` protocol `6`, baud rate `115200`, `fast=False`, `check_voltage=False`, and timeout `5.0` seconds to avoid adapter auto-discovery, command shortcuts, and background voltage checks during the first stationary run.
 *   **Required order:**
     *   Install/confirm `python-obd` in the operator environment.
+    *   Confirm the target vehicle supports ISO 15765-4 CAN protocol `6` (11-bit ID, 500 kbps); stop rather than falling back to protocol auto-discovery if uncertain.
     *   Precompute `vin_hashed` outside AutoPulse; do not read VIN from the vehicle.
     *   Run `PYTHONPATH=src python3 -m autopulse.live.cli ... --dry-run` and confirm exit code `0`.
     *   Confirm stationary setup from `docs/operator-checklists/real-vehicle-smoke-harness.md`.

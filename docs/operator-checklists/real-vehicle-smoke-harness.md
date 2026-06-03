@@ -9,6 +9,7 @@ Status: Required before any stationary vehicle smoke test. Claude re-review pass
 - Operator is in the vehicle or directly supervising the vehicle.
 - No unattended operation.
 - Adapter model and port are known.
+- Target vehicle is confirmed compatible with ISO 15765-4 CAN protocol `6` (11-bit ID, 500 kbps); do not rely on adapter auto-discovery.
 - `vin_hashed` is precomputed outside AutoPulse and supplied with `--vin-hashed`.
 - AutoPulse will not read VIN.
 - Output JSONL path is explicit.
@@ -28,6 +29,7 @@ Status: Required before any stationary vehicle smoke test. Claude re-review pass
 - Motion is detected.
 - Adapter disconnects.
 - Unsupported protocol is detected.
+- Protocol `6` compatibility is uncertain.
 - Any write-capable service is attempted.
 - Raw VIN or raw payload leakage is suspected.
 - Operator presses Ctrl-C.
