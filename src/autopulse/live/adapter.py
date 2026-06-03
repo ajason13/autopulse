@@ -13,6 +13,11 @@ from autopulse.data.validator import command_filter
 
 LIVE_ALLOWED_PIDS = frozenset({0x04, 0x05, 0x06, 0x07, 0x0C, 0x0D})
 J1979_CURRENT_DATA_SERVICE = 0x01
+LIVE_OBD_BAUDRATE = 115200
+LIVE_OBD_CHECK_VOLTAGE = False
+LIVE_OBD_FAST = False
+LIVE_OBD_PROTOCOL = "6"
+LIVE_OBD_TIMEOUT_SECONDS = 5.0
 
 
 class LiveAdapterError(RuntimeError):
@@ -50,7 +55,14 @@ class LiveOBDAdapter:
                 ) from exc
             self._obd = obd_module
 
-        self._connection = self._obd.OBD(self.port, fast=False)
+        self._connection = self._obd.OBD(
+            self.port,
+            baudrate=LIVE_OBD_BAUDRATE,
+            protocol=LIVE_OBD_PROTOCOL,
+            fast=LIVE_OBD_FAST,
+            timeout=LIVE_OBD_TIMEOUT_SECONDS,
+            check_voltage=LIVE_OBD_CHECK_VOLTAGE,
+        )
         if hasattr(self._connection, "is_connected") and not self._connection.is_connected():
             raise LiveAdapterError("adapter did not connect")
 
@@ -105,6 +117,11 @@ class LiveOBDAdapter:
 __all__ = [
     "J1979_CURRENT_DATA_SERVICE",
     "LIVE_ALLOWED_PIDS",
+    "LIVE_OBD_BAUDRATE",
+    "LIVE_OBD_CHECK_VOLTAGE",
+    "LIVE_OBD_FAST",
+    "LIVE_OBD_PROTOCOL",
+    "LIVE_OBD_TIMEOUT_SECONDS",
     "LiveAdapterError",
     "LiveOBDAdapter",
     "PIDNotAllowedError",

@@ -48,6 +48,16 @@ The expected implementation should be a narrow CLI or module that:
 - validates each normalized frame through existing schema validators;
 - writes one sanitized replay-compatible JSON object per accepted sample.
 
+The live `python-obd` connection must use the constrained first-run settings:
+
+- explicit protocol `6` for ISO 15765-4 CAN, 11-bit ID, 500 kbps;
+- explicit baud rate `115200`;
+- `fast=False`;
+- `check_voltage=False`;
+- timeout `5.0` seconds.
+
+These settings intentionally avoid adapter protocol auto-discovery, command repeat shortcuts, response-limit shortcuts, and background adapter-voltage checks during the first stationary smoke test. If the target vehicle is not compatible with protocol `6`, do not fall back to auto-discovery during the live run; stop and open a separate reviewed change.
+
 Required CLI inputs:
 
 - `--adapter-port`

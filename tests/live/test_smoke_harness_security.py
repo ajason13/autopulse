@@ -8,7 +8,16 @@ from pathlib import Path
 import pytest
 
 from autopulse.data.validator import CommandBlockedException, SecurityViolationRedLine
-from autopulse.live.adapter import LIVE_ALLOWED_PIDS, LiveOBDAdapter, PIDNotAllowedError
+from autopulse.live.adapter import (
+    LIVE_ALLOWED_PIDS,
+    LIVE_OBD_BAUDRATE,
+    LIVE_OBD_CHECK_VOLTAGE,
+    LIVE_OBD_FAST,
+    LIVE_OBD_PROTOCOL,
+    LIVE_OBD_TIMEOUT_SECONDS,
+    LiveOBDAdapter,
+    PIDNotAllowedError,
+)
 from autopulse.live.harness import SAFETY_ABORT_EXIT, SmokeHarnessConfig, run_smoke_capture
 from tests.live.fakes import FakeICEAdapter, frame_values
 
@@ -30,6 +39,23 @@ def test_live_adapter_rejects_pid_outside_allowlist():
 
 def test_live_pid_allowlist_is_exact_initial_ice_set():
     assert LIVE_ALLOWED_PIDS == {0x04, 0x05, 0x06, 0x07, 0x0C, 0x0D}
+
+
+def test_live_adapter_forces_safe_python_obd_connection_settings():
+    obd_module = CapturingOBDModule()
+    adapter = LiveOBDAdapter("/dev/tty.fake", obd_module=obd_module)
+
+    adapter.connect()
+
+    assert obd_module.connection is not None
+    assert obd_module.connection.port == "/dev/tty.fake"
+    assert obd_module.connection.kwargs == {
+        "baudrate": LIVE_OBD_BAUDRATE,
+        "protocol": LIVE_OBD_PROTOCOL,
+        "fast": LIVE_OBD_FAST,
+        "timeout": LIVE_OBD_TIMEOUT_SECONDS,
+        "check_voltage": LIVE_OBD_CHECK_VOLTAGE,
+    }
 
 
 def test_live_package_does_not_import_tests_namespace():
@@ -71,3 +97,21 @@ def test_security_violation_during_capture_aborts_and_disconnects(
     assert summary.safety_abort is True
     assert adapter.disconnected is True
     assert (tmp_path / "capture.jsonl").read_text(encoding="utf-8") == ""
+
+
+class CapturingOBDConnection:
+    def __init__(self, port, **kwargs):
+        self.port = port
+        self.kwargs = kwargs
+
+    def is_connected(self):
+        return True
+
+
+class CapturingOBDModule:
+    def __init__(self):
+        self.connection = None
+
+    def OBD(self, port, **kwargs):
+        self.connection = CapturingOBDConnection(port, **kwargs)
+        return self.connection
