@@ -1,6 +1,6 @@
 """Compatibility exports for replay adapter imports."""
 
-from tests.simulation.virtual_replay import (
+from autopulse.virtual_replay import (
     DataPacket,
     EVDataPacket,
     EVMockAdapter,

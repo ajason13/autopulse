@@ -87,7 +87,7 @@ These are context-load indicators, not token measurements.
 | --- | --- | --- | ---: | --- | ---: | ---: | --- | ---: | --- | --- | --- |
 | [P1 control / #53](https://github.com/ajason13/autopulse/issues/53) | control | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 10 | yes; targeted pytest | 0 | Targeted 2 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P1 diagnosis / #54](https://github.com/ajason13/autopulse/issues/54) | diagnosis | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 6 | yes; targeted pytest and standalone repro | 0 | Targeted 1 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
-| [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
+| [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 9 | yes; isolated source-only pytest | 0 | Targeted 1 passed; focused and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
 | [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
 | [P3 context hygiene / #57](https://github.com/ajason13/autopulse/issues/57) | context-hygiene | Starlight local-developer documentation defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
@@ -201,6 +201,31 @@ For every completed task, append this compact note below the ledger:
 - Builder decision: keep the diagnosis treatment for hard bugs. It forced a
   testable failure before changing state, without adding agents, logging, or
   user round-trips in this task.
+
+### #56 — 2026-08-12
+
+- Arm: control
+- Comparable-pair rationale: offline replay developer compatibility; paired
+  with #55 before implementation.
+- Model / effort and exception, if any: Builder baseline. Session-level token
+  and wall-clock usage were not surfaced/captured, so both are `UNAVAILABLE`.
+- Active minutes / surfaced tokens / agents / tools: `UNAVAILABLE` /
+  `UNAVAILABLE` / 1 / 9.
+- Feedback loop: `PYTHONPATH=src python3 -m pytest
+  tests/test_us002_virtual_replay_harness.py::TestLogReplayerModes::test_production_replay_modules_import_from_source_only_copy -q`
+  (1 passed). The pre-fix isolated import failed with
+  `ModuleNotFoundError: No module named 'tests'`.
+- Scope decision: promoting replay support exposed an eager repository-schema
+  load. Validator imports are now deferred to validation/guard operations, so
+  importing the source package is side-effect-free while existing validation
+  paths and schemas remain unchanged.
+- Rework cycles and cause: 0.
+- Verification: targeted source-only import regression (1 passed); focused
+  US-002/debug/EV replay suite passed; `PYTHONPATH=src python3 -m pytest -q`
+  passed; `git diff --check` passed.
+- 14-day quality outcome: not yet observable.
+- Builder decision: baseline complete. The repair keeps the test package as a
+  compatibility shim while making the source package independently importable.
 
 ## Sources checked
 
