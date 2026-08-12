@@ -1056,6 +1056,25 @@ class TestLogReplayerModes:
         replayer = ProdLogReplayer(adapter, frequency_hz=10, drift=0.05)
         assert replayer._drift == 0.05
 
+    @pytest.mark.parametrize(
+        ("frame_count", "expected_interval_count"),
+        [(1, 0), (3, 2)],
+    )
+    def test_production_replayer_records_intervals_only_between_frames(
+        self,
+        frame_count,
+        expected_interval_count,
+    ):
+        rows = [_good_row() for _ in range(frame_count)]
+        adapter = ProdMockAdapter(ProdJSONLProvider(rows))
+        replayer = ProdLogReplayer(adapter, frequency_hz=100)
+        replayer.start()
+        replayer.join(timeout=1.0)
+        replayer.stop()
+
+        assert len(replayer.frames) == frame_count
+        assert len(replayer.inter_frame_intervals) == expected_interval_count
+
     def test_replayer_stops_gracefully_on_exhausted_dataset(self):
         rows = [_good_row() for _ in range(3)]
         adapter = MockAdapter(JSONLProvider(rows))
