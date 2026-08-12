@@ -934,14 +934,13 @@ class LogReplayer:
                 self._running = False
                 break
             started_at = time.perf_counter()
-            with self._lock:
-                self._dispatch_timestamps.append(started_at)
             try:
                 if self._drift:
                     time.sleep(self._drift)
                 frame = self._adapter.fetch_frame()
                 with self._lock:
                     self._frames.append(frame)
+                    self._dispatch_timestamps.append(started_at)
             except StopIteration:
                 self._running = False
                 break
