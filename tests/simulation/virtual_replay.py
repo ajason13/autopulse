@@ -872,10 +872,11 @@ class LogReplayer:
     def set_speed(self, multiplier: float) -> None:
         if multiplier <= 0:
             raise ValueError("Speed multiplier must be positive.")
-        self._frequency_hz = round(self._frequency_hz * multiplier)
-        if self._frequency_hz <= 0:
+        candidate_frequency_hz = round(self._frequency_hz * multiplier)
+        if candidate_frequency_hz <= 0:
             raise ValueError("Speed multiplier produced zero frequency.")
-        self._validate_drift_budget(self._frequency_hz, self._drift)
+        self._validate_drift_budget(candidate_frequency_hz, self._drift)
+        self._frequency_hz = candidate_frequency_hz
 
     def start(self, max_frames: Optional[int] = None) -> None:
         self._running = True
