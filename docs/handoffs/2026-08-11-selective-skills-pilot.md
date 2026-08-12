@@ -90,7 +90,7 @@ These are context-load indicators, not token measurements.
 | [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 9 | yes; isolated source-only pytest | 0 | Targeted 1 passed; focused and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 8 | yes; targeted parser pytest and standalone repro | 0 | Targeted 8 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Static route check and Starlight build passed | Not yet observable | Ready for review; docs-only, observability unchanged |
-| [P3 context hygiene / #57](https://github.com/ajason13/autopulse/issues/57) | context-hygiene | Starlight local-developer documentation defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
+| [P3 context hygiene / #57](https://github.com/ajason13/autopulse/issues/57) | context-hygiene | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Node source check and Starlight build passed | Not yet observable | Ready for review; 16,931 always-loaded bytes unchanged; 4 authoritative sources |
 
 ## Created task backlog
 
@@ -276,6 +276,32 @@ For every completed task, append this compact note below the ledger:
 - Builder decision: baseline complete. The existing docs E2E suite already
   covers rendered internal links; the scoped README correction required no
   additional runtime or dependency change.
+
+### #57 — 2026-08-12
+
+- Arm: context-hygiene
+- Comparable-pair rationale: Starlight local-developer documentation defect;
+  paired with #58 before implementation.
+- Model / effort and exception, if any: Builder docs baseline with the adapted
+  context-hygiene preflight. Session-level token and wall-clock usage were not
+  surfaced/captured, so both are `UNAVAILABLE`.
+- Active minutes / surfaced tokens / agents / tools: `UNAVAILABLE` /
+  `UNAVAILABLE` / 1 / 4.
+- Context-hygiene preflight: 16,931 bytes of always-loaded local instructions
+  before and after (`AGENTS.md` plus `CONTEXT.md`); four authoritative sources
+  to identify the task constraints: governance, pilot task record, `.nvmrc`,
+  and the deployment workflow. The task guide is conditional context, so it
+  was corrected without expanding always-loaded instructions.
+- Feedback loop: not applicable; documentation setup correctness was checked
+  against Astro's installed `engines.node` value and the project `.nvmrc`.
+- Rework cycles and cause: 0.
+- Verification: Astro reports Node `>=22.12.0`; `.nvmrc` pins 24; the guide
+  uses `nvm install` and `nvm use`; `source "$HOME/.nvm/nvm.sh" && nvm use &&
+  npm run build` passed with Node 24; `git diff --check` passed.
+- 14-day quality outcome: not yet observable.
+- Builder decision: keep the context-hygiene preflight for docs/tooling work.
+  It located the authoritative version source before editing and avoided
+  duplicating a vague, stale version claim.
 
 ## Sources checked
 

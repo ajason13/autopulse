@@ -10,7 +10,8 @@ Welcome to AutoPulse! This guide will walk you through setting up the project lo
 Before you begin, ensure you have the following installed:
 
 - **Python 3.10+**: For the core PdM analysis engine.
-- **Node.js 20+**: For the Starlight documentation site.
+- **Node.js 22.12+**: For the Starlight documentation site. AutoPulse pins
+  Node 24 in `grubby-galaxy/.nvmrc` for local builds and deployment.
 - **nvm** (Optional but recommended): To manage Node versions.
 
 ## 1. Setup the Environment
@@ -36,6 +37,8 @@ AutoPulse uses Starlight for technical documentation. To run it locally:
 
 ```bash
 cd grubby-galaxy
+nvm install
+nvm use
 npm install
 npm run dev
 ```
