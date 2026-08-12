@@ -64,8 +64,8 @@ This checks every generated docs route, interior-page mobile and desktop navigat
 
 The specifications are available at the following local routes (when the dev server is running):
 
-- [/specs/us-001-engine-data-contract/](/specs/us-001-engine-data-contract/)
-- [/specs/us-002-virtual-replay-harness/](/specs/us-002-virtual-replay-harness/)
+- [/autopulse/specs/us-001-engine-data-contract/](/autopulse/specs/us-001-engine-data-contract/)
+- [/autopulse/specs/us-002-virtual-replay-harness/](/autopulse/specs/us-002-virtual-replay-harness/)
 
 ## 🚀 Project Structure
 
