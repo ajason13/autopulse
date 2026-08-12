@@ -85,12 +85,25 @@ These are context-load indicators, not token measurements.
 
 | Pair/task | Arm | Comparable because | Active min | Tokens | Agents | Tools | Red-capable loop | Rework cycles | Verification | 14-day outcome | Notes |
 | --- | --- | --- | ---: | --- | ---: | ---: | --- | ---: | --- | --- | --- |
-| [P1 control / #53](https://github.com/ajason13/autopulse/issues/53) | control | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 10 | yes; targeted pytest | 0 | Targeted 2 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
-| [P1 diagnosis / #54](https://github.com/ajason13/autopulse/issues/54) | diagnosis | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 6 | yes; targeted pytest and standalone repro | 0 | Targeted 1 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
-| [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 9 | yes; isolated source-only pytest | 0 | Targeted 1 passed; focused and full pytest passed | Not yet observable | Ready for review; observability unchanged |
-| [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 8 | yes; targeted parser pytest and standalone repro | 0 | Targeted 8 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
-| [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Static route check and Starlight build passed | Not yet observable | Ready for review; docs-only, observability unchanged |
-| [P3 context hygiene / #57](https://github.com/ajason13/autopulse/issues/57) | context-hygiene | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Node source check and Starlight build passed | Not yet observable | Ready for review; 16,931 always-loaded bytes unchanged; 4 authoritative sources |
+| [P1 control / #53](https://github.com/ajason13/autopulse/issues/53) | control | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 10 | yes; targeted pytest | 0 | Targeted 2 passed; US-002 and full pytest passed | Not yet observable | Merged 2026-08-12; observability unchanged |
+| [P1 diagnosis / #54](https://github.com/ajason13/autopulse/issues/54) | diagnosis | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 6 | yes; targeted pytest and standalone repro | 0 | Targeted 1 passed; US-002 and full pytest passed | Not yet observable | Merged 2026-08-12; observability unchanged |
+| [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 9 | yes; isolated source-only pytest | 0 | Targeted 1 passed; focused and full pytest passed | Not yet observable | Merged 2026-08-12; observability unchanged |
+| [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 8 | yes; targeted parser pytest and standalone repro | 0 | Targeted 8 passed; US-002 and full pytest passed | Not yet observable | Merged 2026-08-12; observability unchanged |
+| [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Static route check and Starlight build passed | Not yet observable | Merged 2026-08-12; docs-only, observability unchanged |
+| [P3 context hygiene / #57](https://github.com/ajason13/autopulse/issues/57) | context-hygiene | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Node source check and Starlight build passed | Not yet observable | Merged 2026-08-12; 16,931 always-loaded bytes unchanged; 4 authoritative sources |
+
+## Pilot status — observation phase
+
+All six implementation tasks merged on 2026-08-12. Record an escaped defect,
+regression, required correction, or governance breach against each task through
+2026-08-26 inclusive. Do not claim adoption, token efficiency, or a causal
+quality effect before this observation window closes.
+
+Token and active-time comparisons are **inconclusive**: this Codex surface did
+not expose session usage or an active-work timer for any pilot task. The final
+decision may still evaluate safety, verification, rework, user round-trips,
+and the Builder notes, but must record that the pilot did not measure the
+predeclared token/time thresholds.
 
 ## Created task backlog
 
