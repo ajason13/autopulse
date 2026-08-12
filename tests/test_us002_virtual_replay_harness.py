@@ -19,13 +19,18 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import re
+import shutil
 import statistics
+import subprocess
+import sys
 import time
 import threading
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Iterator, Optional
 from unittest.mock import MagicMock, patch
 
@@ -1015,6 +1020,24 @@ class TestLogReplayer10Hz:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestLogReplayerModes:
+
+    def test_production_replay_modules_import_from_source_only_copy(self, tmp_path):
+        source_package = Path(__file__).resolve().parents[1] / "src" / "autopulse"
+        shutil.copytree(source_package, tmp_path / "autopulse")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import autopulse.replayer, autopulse.noise, autopulse.providers",
+            ],
+            cwd=tmp_path,
+            env={**os.environ, "PYTHONPATH": str(tmp_path)},
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
 
     def test_set_speed_doubles_frequency(self):
         rows = [_good_row() for _ in range(10)]

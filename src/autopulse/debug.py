@@ -26,7 +26,7 @@ from autopulse.data.validator import (
     validate_frame,
 )
 from autopulse.replayer import ReplayMode, replay_ev_sequence
-from tests.simulation.virtual_replay import (
+from autopulse.virtual_replay import (
     EVMockAdapter,
     JSONLProvider,
     MockAdapter,
