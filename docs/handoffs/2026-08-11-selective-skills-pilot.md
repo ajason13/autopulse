@@ -89,7 +89,7 @@ These are context-load indicators, not token measurements.
 | [P1 diagnosis / #54](https://github.com/ajason13/autopulse/issues/54) | diagnosis | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 6 | yes; targeted pytest and standalone repro | 0 | Targeted 1 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 9 | yes; isolated source-only pytest | 0 | Targeted 1 passed; focused and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 8 | yes; targeted parser pytest and standalone repro | 0 | Targeted 8 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
-| [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
+| [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Static route check and Starlight build passed | Not yet observable | Ready for review; docs-only, observability unchanged |
 | [P3 context hygiene / #57](https://github.com/ajason13/autopulse/issues/57) | context-hygiene | Starlight local-developer documentation defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
 
 ## Created task backlog
@@ -255,6 +255,27 @@ For every completed task, append this compact note below the ledger:
 - Builder decision: keep the diagnosis treatment for parsing defects. The
   failing representation matrix ruled out an unnecessary replay/schema change
   before implementation.
+
+### #58 — 2026-08-12
+
+- Arm: control
+- Comparable-pair rationale: Starlight local-developer documentation defect;
+  paired with #57 before implementation.
+- Model / effort and exception, if any: Builder docs baseline. Session-level
+  token and wall-clock usage were not surfaced/captured, so both are
+  `UNAVAILABLE`.
+- Active minutes / surfaced tokens / agents / tools: `UNAVAILABLE` /
+  `UNAVAILABLE` / 1 / 4.
+- Feedback loop: not applicable; the defect is a static route example. A
+  PCRE route scan verified no root-relative internal README links remained.
+- Rework cycles and cause: 0.
+- Verification: `source "$HOME/.nvm/nvm.sh" && nvm use && npm run build`
+  passed with Node 24; static root-relative route scan found none; `git diff
+  --check` passed.
+- 14-day quality outcome: not yet observable.
+- Builder decision: baseline complete. The existing docs E2E suite already
+  covers rendered internal links; the scoped README correction required no
+  additional runtime or dependency change.
 
 ## Sources checked
 
