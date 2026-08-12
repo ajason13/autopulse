@@ -1044,6 +1044,17 @@ class TestLogReplayerModes:
         with pytest.raises(ValueError):
             replayer.set_speed(0.4)
 
+    def test_production_replayer_preserves_frequency_when_drift_rejects_speed(self):
+        adapter = ProdMockAdapter(ProdJSONLProvider([]))
+        replayer = ProdLogReplayer(adapter, frequency_hz=1, drift=0.75)
+
+        with pytest.raises(ValueError, match="frame interval"):
+            replayer.set_speed(2)
+
+        assert replayer._frequency_hz == 1
+        replayer.set_speed(1)
+        assert replayer._frequency_hz == 1
+
     def test_drift_equal_to_interval_raises_value_error(self):
         rows = [_good_row()]
         adapter = MockAdapter(JSONLProvider(rows))

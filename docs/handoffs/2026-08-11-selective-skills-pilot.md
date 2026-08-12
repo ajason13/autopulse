@@ -86,7 +86,7 @@ These are context-load indicators, not token measurements.
 | Pair/task | Arm | Comparable because | Active min | Tokens | Agents | Tools | Red-capable loop | Rework cycles | Verification | 14-day outcome | Notes |
 | --- | --- | --- | ---: | --- | ---: | ---: | --- | ---: | --- | --- | --- |
 | [P1 control / #53](https://github.com/ajason13/autopulse/issues/53) | control | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 10 | yes; targeted pytest | 0 | Targeted 2 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
-| [P1 diagnosis / #54](https://github.com/ajason13/autopulse/issues/54) | diagnosis | Offline replay timing/state defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
+| [P1 diagnosis / #54](https://github.com/ajason13/autopulse/issues/54) | diagnosis | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 6 | yes; targeted pytest and standalone repro | 0 | Targeted 1 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
 | [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
 | [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
@@ -173,6 +173,34 @@ For every completed task, append this compact note below the ledger:
 - Builder decision: baseline complete. The narrow regression test established
   the cardinality contract without adding logging or changing safety-sensitive
   behavior.
+
+### #54 — 2026-08-12
+
+- Arm: diagnosis
+- Comparable-pair rationale: offline replay timing/state; paired with #53
+  before implementation.
+- Model / effort and exception, if any: Builder baseline with the adapted
+  diagnosis treatment. Session-level token and wall-clock usage were not
+  surfaced/captured, so both are `UNAVAILABLE`.
+- Active minutes / surfaced tokens / agents / tools: `UNAVAILABLE` /
+  `UNAVAILABLE` / 1 / 6.
+- Feedback loop: `PYTHONPATH=src python3 -m pytest
+  tests/test_us002_virtual_replay_harness.py::TestLogReplayerModes::test_production_replayer_preserves_frequency_when_drift_rejects_speed -q`
+  (red before fix; 1 passed after fix), backed by the minimized standalone
+  `set_speed(2)` repro.
+- Diagnosis record: the candidate frequency was committed before drift-budget
+  validation. Alternatives considered: validation used a different rate,
+  rounding created the invalid rate, or stale state was reconstructed later.
+  Source order falsified the latter three for this case.
+- Rework cycles and cause: 0.
+- Verification: targeted regression (1 passed); minimized standalone repro
+  preserved 1 Hz after rejection; `PYTHONPATH=src python3 -m pytest
+  tests/test_us002_virtual_replay_harness.py -q` passed; `PYTHONPATH=src
+  python3 -m pytest -q` passed; `git diff --check` passed.
+- 14-day quality outcome: not yet observable.
+- Builder decision: keep the diagnosis treatment for hard bugs. It forced a
+  testable failure before changing state, without adding agents, logging, or
+  user round-trips in this task.
 
 ## Sources checked
 
