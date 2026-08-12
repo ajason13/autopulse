@@ -88,7 +88,7 @@ These are context-load indicators, not token measurements.
 | [P1 control / #53](https://github.com/ajason13/autopulse/issues/53) | control | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 10 | yes; targeted pytest | 0 | Targeted 2 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P1 diagnosis / #54](https://github.com/ajason13/autopulse/issues/54) | diagnosis | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 6 | yes; targeted pytest and standalone repro | 0 | Targeted 1 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 9 | yes; isolated source-only pytest | 0 | Targeted 1 passed; focused and full pytest passed | Not yet observable | Ready for review; observability unchanged |
-| [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
+| [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 8 | yes; targeted parser pytest and standalone repro | 0 | Targeted 8 passed; US-002 and full pytest passed | Not yet observable | Ready for review; observability unchanged |
 | [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
 | [P3 context hygiene / #57](https://github.com/ajason13/autopulse/issues/57) | context-hygiene | Starlight local-developer documentation defect; paired before implementation | — | — | — | — | — | — | — | — | Not started |
 
@@ -226,6 +226,35 @@ For every completed task, append this compact note below the ledger:
 - 14-day quality outcome: not yet observable.
 - Builder decision: baseline complete. The repair keeps the test package as a
   compatibility shim while making the source package independently importable.
+
+### #55 — 2026-08-12
+
+- Arm: diagnosis
+- Comparable-pair rationale: offline replay developer compatibility; paired
+  with #56 before implementation.
+- Model / effort and exception, if any: Builder baseline with the adapted
+  diagnosis treatment. GitHub issue retrieval had a transient certificate
+  error; the locally recorded approved issue artifact supplied scope. Token
+  and wall-clock usage were not surfaced/captured, so both are `UNAVAILABLE`.
+- Active minutes / surfaced tokens / agents / tools: `UNAVAILABLE` /
+  `UNAVAILABLE` / 1 / 8.
+- Feedback loop: `PYTHONPATH=src python3 -m pytest
+  tests/test_us002_virtual_replay_harness.py::TestProductionCandidParser -q`
+  (red before fix; 8 passed after fix), backed by direct parser decoding of
+  `"0C"`, `"0x0C"`, and `12`.
+- Diagnosis record: prefix-only base selection was the leading hypothesis;
+  malformed data bytes, representation mismatch, and downstream normalization
+  were alternatives. The red test showed only bare hexadecimal failed, and
+  `_pid()` confirmed only prefixed strings used base 16.
+- Rework cycles and cause: 0.
+- Verification: targeted parser regression (8 passed); standalone three-form
+  decode check passed; `PYTHONPATH=src python3 -m pytest
+  tests/test_us002_virtual_replay_harness.py -q` passed; `PYTHONPATH=src
+  python3 -m pytest -q` passed; `git diff --check` passed.
+- 14-day quality outcome: not yet observable.
+- Builder decision: keep the diagnosis treatment for parsing defects. The
+  failing representation matrix ruled out an unnecessary replay/schema change
+  before implementation.
 
 ## Sources checked
 

@@ -1339,6 +1339,16 @@ class TestSpecTestVectors:
 class TestProductionCandidParser:
     """Production parser tests for known CANdid decode boundary behavior."""
 
+    @pytest.mark.parametrize("pid", ["0C", "0x0C", 12])
+    def test_engine_rpm_pid_accepts_bare_hex_prefixed_hex_and_integer(self, pid):
+        parsed = ProdCandidParser().parse({"pid": pid, "data": "0C 80"})
+
+        assert parsed["engine_rpm"] == 800.0
+
+    def test_invalid_pid_token_raises_value_error(self):
+        with pytest.raises(ValueError):
+            ProdCandidParser().parse({"pid": "not-a-pid", "data": "0C 80"})
+
     @pytest.mark.parametrize(
         "pid,field_name",
         [

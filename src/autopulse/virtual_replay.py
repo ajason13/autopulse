@@ -354,9 +354,12 @@ class CandidParser:
         if raw_pid is None:
             return None
         if isinstance(raw_pid, str):
-            if raw_pid.lower().startswith("0x"):
-                return int(raw_pid, 16)
-            return int(raw_pid)
+            pid_token = raw_pid.strip()
+            if pid_token.lower().startswith("0x") or any(
+                character in "abcdefABCDEF" for character in pid_token
+            ):
+                return int(pid_token, 16)
+            return int(pid_token, 10)
         return int(raw_pid)
 
     @staticmethod
