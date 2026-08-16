@@ -8,7 +8,22 @@ from pathlib import Path
 import re
 
 
-ALLOWED = re.compile(r"^- (?:Cell|CPython|Install|Registry access|Tampered-hash|Incomplete-wheelhouse|Built wheel|Built sdist|Installed validator|Installed offline CLI|`autopulse.live` absence|AutoPulse wheel|AutoPulse sdist|Wheelhouse manifest|`[A-Za-z0-9_.-]+\.whl`)")
+ALLOWED = re.compile(
+    r"^- (?:"
+    r"Cell: `cp(?:313|314)-(?:linux|macos|windows)-[a-z0-9_]+`|"
+    r"CPython: `3\.(?:13|14)\.\d+`|"
+    r"Install: PASS \(`--no-index --require-hashes --only-binary=:all:`\)|"
+    r"Registry access during install probes: DISABLED \(`--no-index` and `PIP_NO_INDEX=1`\)|"
+    r"(?:Tampered-hash|Incomplete-wheelhouse) install rejection: PASS|"
+    r"Built (?:wheel|sdist) archive policy \(`validate_archive\(\)`\): PASS|"
+    r"Installed validator/schema resource smoke: PASS|"
+    r"Installed offline CLI smoke: PASS|"
+    r"`autopulse\.live` absence \(metadata and import\): PASS|"
+    r"AutoPulse (?:wheel|sdist): `autopulse-[A-Za-z0-9_.-]+` \(`sha256:[0-9a-f]{64}`\)|"
+    r"Wheelhouse manifest SHA-256: `[0-9a-f]{64}`|"
+    r"`[A-Za-z0-9_.-]+\.whl` \(`sha256:[0-9a-f]{64}`\)"
+    r")$"
+)
 
 
 def main() -> int:
