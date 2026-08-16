@@ -30,9 +30,6 @@ jobs:
           - { runner: macos-15, python: '3.14', label: macos-15-arm64, shell: bash, windows_note: '' }
           - { runner: windows-2025, python: '3.13', label: windows-server-x64, shell: pwsh, windows_note: ' — compatibility evidence, not Windows 11 desktop validation' }
           - { runner: windows-2025, python: '3.14', label: windows-server-x64, shell: pwsh, windows_note: ' — compatibility evidence, not Windows 11 desktop validation' }
-    defaults:
-      run:
-        shell: ${{ matrix.shell }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -70,7 +67,7 @@ jobs:
           python -m pytest -q
       - name: Emit allowlist-built summary
         if: matrix.shell == 'bash'
-        shell: ${{ matrix.shell }}
+        shell: bash
         run: |
           python scripts/emit_ci_summary.py --source .ci-summary.md --commit ${{ github.sha }} --output $GITHUB_STEP_SUMMARY
       - name: Emit allowlist-built summary (Windows)
