@@ -55,6 +55,11 @@
     *   Added `docs/operator-checklists/real-vehicle-smoke-harness.md`.
     *   Verification: `tests/live` -> `27 passed`; targeted live/logging/debug/security suite -> `70 passed`; full suite -> `598 passed`.
     *   Claude re-review passed on 2026-05-28 with no blockers; approved for merge.
+*   **Live Adapter Safe Connection Settings:** ✅ **DONE**.
+    *   Merged via PR #36 on 2026-06-03.
+    *   Forces the stationary live OBD adapter to use explicit `python-obd` connection settings: protocol `6`, baud rate `115200`, `fast=False`, `check_voltage=False`, and timeout `5.0` seconds.
+    *   Adds regression coverage against adapter auto-discovery, fast mode, voltage polling, and implicit constructor defaults.
+    *   Verification: `PYTHONPATH=src python3 -m pytest tests/live -q` -> `28 passed`; full suite produced one transient US-002 timing failure, and the focused rerun passed.
 
 ## Governance Update (June 2026)
 *   Codex has taken over the Lead Architect & Coordinator role formerly held by Antigravity CLI / Gemini because Gemini CLI rate limits made it unreliable for day-to-day coordination.
@@ -72,7 +77,7 @@
 
 ## Active Work: Stationary Vehicle Smoke Test Execution
 *   **Goal:** Execute the first real-vehicle check using the merged read-only smoke harness.
-*   **Current status:** Safe connection settings patch in progress on `live-adapter-safe-connection-settings`; do not run a live vehicle capture until this patch receives Claude review/sign-off and merges.
+*   **Current status:** PR #36 is merged. Proceed only with the dry-run first, the operator checklist, explicit protocol `6` compatibility confirmation, and bounded stationary capture limits.
 *   **Connection hardening scope:** `LiveOBDAdapter` now forces `python-obd` protocol `6`, baud rate `115200`, `fast=False`, `check_voltage=False`, and timeout `5.0` seconds to avoid adapter auto-discovery, command shortcuts, and background voltage checks during the first stationary run.
 *   **Required order:**
     *   Install/confirm `python-obd` in the operator environment.
@@ -110,3 +115,23 @@
 ## Team Roster (2026)
 *   **Lead Architect, Coordinator & Developer:** Codex (GPT-5.5)
 *   **Lead Auditor:** Claude (Sonnet 4.6)
+
+## PR-001 Decision Record (2026-08-11)
+*   Codex owns the draft offline/replay release specification at `docs/specs/pr-001-offline-release-profile-and-threat-model.md`.
+*   Scope is a local educational package profile only: CPython 3.13/3.14 on a deliberately narrow OS matrix, with no network required after installation and no fleet, road, unattended-live, VIN-read, capture, or write-capable diagnostic use.
+*   Claude returned a pre-implementation `MINOR FIXES` verdict on 2026-08-12. Codex incorporated: per-cell prebuilt-wheel evidence, independently signed and expiring critical/high vulnerability exceptions, automated SBOM privacy/path-leak scanning, path-free support-command examples, and a fail-closed sdist/wheel content allowlist gate.
+*   Claude's 2026-08-12 focused re-review returned `NO BLOCKERS`, closing MF-01 through MF-05 and both tracked observations. PR-002 may begin against this specification, but each subsequent PR remains separately gated. This is specification approval only; no implementation or release approval is claimed. PR-001 remains unclosed in the tracker per task instruction.
+
+## PR-002 Architecture Kickoff (2026-08-13)
+*   Codex created `docs/specs/pr-002-packaging-supply-chain-decision-record.md`: Hatchling/PEP 621, universal lock with per-cell wheel/hash proof, canonical schema resource staging, CycloneDX, pip-audit/pip-licenses, artifact allowlist, and offline-only public CLI boundaries. The planned offline distribution excludes `autopulse.live` and must prove its import fails after installation.
+*   Claude's 2026-08-13 PR-002 contract re-review returned `NO BLOCKERS`, after the explicit `validator.py` installed-resource migration requirement and the matrix-evidence, license-CSV, determinism, archive/RECORD, and content-scan gates were added. PR-002 implementation may begin; no package metadata, dependencies, schemas, CI, release artifact, or runtime behavior has changed yet.
+*   Implementation encountered a Hatchling format constraint: root `.gitignore` is unavoidable in its sdist. The only approved exception allows that exact root file in an sdist; wheels and all other VCS-named paths remain prohibited. The archive validator must enforce this distinction, and it requires Claude follow-up review.
++*   PR-002 implementation added Hatchling/PEP 621 metadata, the universal lock, packaged schema resources with `importlib.resources` loading, offline-only CLI packaging, hash/wheelhouse verification, supply-chain policy scripts, package documentation, and focused packaging tests.
+*   Verified locally: 33 packaging-policy tests; 198 targeted schema/package tests; deterministic artifacts/SBOM; strict `pip-audit`, license policy, `twine check --strict`, and `check-wheel-contents`; one native CPython 3.14.6 macOS x86_64 offline install. Full-suite output was incomplete despite exit code `0`; remaining supported cells are unverified. Claude implementation audit is pending in `docs/prompts/claude-pr-002-packaging-supply-chain-implementation-audit.md`.
+*   Claude's 2026-08-13 implementation audit returned `APPROVED WITH MINOR FIXES`: a complete captured full-suite result, direct archive-policy evidence, and negative hash/wheelhouse installation evidence were required before merge. Codex added those checks and clarified that raw-identifier scanning is intentionally suppression-free. Verification now records `643 passed in 57.54s`, 36 packaging tests, and native macOS x86_64 evidence for CPython 3.13.14 and 3.14.6. Claude's focused re-review then returned `NO BLOCKERS`: the full-suite gate, direct real-artifact validation, negative pip probes, and suppression-free decision are confirmed. Linux x86_64, Windows x86_64, and macOS arm64 native evidence remains unavailable locally. The PR-002 contract's literal every-supported-cell acceptance criterion remains a release-evidence gap to resolve in PR-003; no release is authorized.
+
+## PR-003 CI Architecture Kickoff (2026-08-14)
+*   Codex created `docs/specs/pr-003-ci-release-gates-and-docs-assurance.md` and the self-contained Claude Chat QA prompt `docs/prompts/claude-pr-003-ci-release-gates-qa-plan.md`. PR-003 is still pre-implementation: it proposes eight explicit CPython 3.13/3.14 matrix cells, pinned Actions, read-only untrusted-PR checks, PR-002 fail-closed packaging evidence, and non-deploying `/autopulse/` documentation verification.
+*   The contract records a material evidence boundary: GitHub's available x64 Windows hosted runners are server images, not Windows 11 desktop proof. PR-003 must label them only as compatibility evidence and must not add a self-hosted runner or silently claim the Windows 11 profile is validated.
+*   Claude's 2026-08-15 focused NF-01 re-review returned `NO BLOCKERS`. PR-003 CI/documentation implementation is authorized against the approved contract. Implement its Windows static test as a positive allowlist: each required Windows gate's `shell` value must equal `pwsh`, rather than only blocking `cmd`/`bat` spellings. This is CI/documentation authorization only—no public release or Windows 11 validation is approved. No live diagnostic, telemetry, VIN, or write-capable scope is authorized.
+*   PR-003 implementation now replaces the legacy CI with the approved eight-cell release-gate matrix, immutable action pins, explicit Bash/PowerShell failure handling, wheelhouse/offline/package/supply-chain gates, sanitized summary emission, and a non-deploying committed-config docs job. `deploy-docs.yml` action pins are hardened. New workflow-contract tests pass with targeted packaging tests (`35 passed`), and the Starlight build passed. A complete final full-suite capture and Claude implementation audit remain required before merge.

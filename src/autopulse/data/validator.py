@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from pathlib import Path
+from importlib.resources import files
 import time
 from typing import Any
 
@@ -13,16 +13,7 @@ from jsonschema import Draft7Validator, FormatChecker
 
 
 LOGGER = get_logger(__name__)
-SCHEMA_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "schemas"
-    / "engine_obd_frame.schema.json"
-)
-EV_SCHEMA_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "schemas"
-    / "ev_obd_frame.schema.json"
-)
+_SCHEMA_PACKAGE = "autopulse.schemas"
 
 ICE_PROTOCOLS = frozenset({"SAE_J1979", "SAE_J1979-2"})
 EV_PROTOCOLS = frozenset(
@@ -72,16 +63,24 @@ class CommandBlockedException(Exception):
         super().__init__(f"{code}: {message}")
 
 
+def _load_packaged_schema(filename: str) -> dict[str, Any]:
+    """Load one immutable schema resource from the installed package."""
+    resource = files(_SCHEMA_PACKAGE).joinpath(filename)
+    with resource.open("r", encoding="utf-8") as schema_file:
+        schema = json.load(schema_file)
+    if not isinstance(schema, dict):
+        raise TypeError(f"Packaged schema {filename!r} must contain an object.")
+    return schema
+
+
 def load_engine_obd_frame_schema() -> dict[str, Any]:
-    """Load the strict US-001 engine OBD-II frame JSON schema from disk."""
-    with SCHEMA_PATH.open(encoding="utf-8") as schema_file:
-        return json.load(schema_file)
+    """Load the strict US-001 engine OBD-II frame packaged resource."""
+    return _load_packaged_schema("engine_obd_frame.schema.json")
 
 
 def load_ev_obd_frame_schema() -> dict[str, Any]:
-    """Load the strict US-006 EV telemetry frame JSON schema from disk."""
-    with EV_SCHEMA_PATH.open(encoding="utf-8") as schema_file:
-        return json.load(schema_file)
+    """Load the strict US-006 EV telemetry frame packaged resource."""
+    return _load_packaged_schema("ev_obd_frame.schema.json")
 
 
 ENGINE_OBD_FRAME_SCHEMA = load_engine_obd_frame_schema()

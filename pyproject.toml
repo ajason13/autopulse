@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling==1.31.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "autopulse"
+version = "0.1.0"
+description = "Educational, read-only OBD-II validation and offline replay tools"
+readme = "docs/offline-package.md"
+requires-python = ">=3.13,<3.15"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+  { name = "AutoPulse contributors" },
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Education",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+  "jsonschema>=4.23,<5",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9,<10",
+]
+release = [
+  "build==1.5.0",
+  "check-wheel-contents==0.6.3",
+  "cyclonedx-bom==7.3.1",
+  "pip-audit==2.10.1",
+  "pip-licenses==5.5.5",
+  "twine==6.2.0",
+  "uv==0.11.32",
+]
+
+[project.scripts]
+autopulse-debug = "autopulse.debug:main"
+
+[project.urls]
+Repository = "https://github.com/ajason13/autopulse"
+
+[tool.hatch.build]
+directory = "dist"
+exclude = [
+  "/.gitignore",
+  "/src/autopulse/live",
+  "/src/autopulse/live/**",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/LICENSE",
+  "/docs/offline-package.md",
+  "/pyproject.toml",
+  "/schemas/*.json",
+  "/src/autopulse/**/*.py",
+  "/src/autopulse/schemas/*.json",
+  "/uv.lock",
+]
+exclude = [
+  "/.gitignore",
+  "/src/autopulse/live",
+  "/src/autopulse/live/**",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/autopulse"]
+exclude = [
+  "/src/autopulse/live",
+  "/src/autopulse/live/**",
+]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "src"]

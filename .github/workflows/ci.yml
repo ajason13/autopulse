@@ -5,65 +5,94 @@ on:
     branches: [main]
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Python tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+  release-gates:
+    name: ${{ matrix.label }} / CPython ${{ matrix.python }}${{ matrix.windows_note }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, python: '3.13', label: ubuntu-24.04-x64, shell: bash, windows_note: '' }
+          - { runner: ubuntu-24.04, python: '3.14', label: ubuntu-24.04-x64, shell: bash, windows_note: '' }
+          - { runner: macos-15-intel, python: '3.13', label: macos-15-intel, shell: bash, windows_note: '' }
+          - { runner: macos-15-intel, python: '3.14', label: macos-15-intel, shell: bash, windows_note: '' }
+          - { runner: macos-15, python: '3.13', label: macos-15-arm64, shell: bash, windows_note: '' }
+          - { runner: macos-15, python: '3.14', label: macos-15-arm64, shell: bash, windows_note: '' }
+          - { runner: windows-2025, python: '3.13', label: windows-server-x64, shell: pwsh, windows_note: ' — compatibility evidence, not Windows 11 desktop validation' }
+          - { runner: windows-2025, python: '3.14', label: windows-server-x64, shell: pwsh, windows_note: ' — compatibility evidence, not Windows 11 desktop validation' }
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install dependencies
+          python-version: ${{ matrix.python }}
+      - name: Run fail-closed release gates (Linux/macOS)
+        if: matrix.shell == 'bash'
+        shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-
-      - name: Syntax check
+          python -m pip install -r requirements-release.txt -r requirements-dev.txt
+          python -m uv export --locked --all-extras --no-emit-project --format requirements-txt --output-file .ci-requirements.txt
+          python -m pip download --only-binary=:all: --dest .ci-wheelhouse -r .ci-requirements.txt
+          python scripts/build_release_artifacts.py --output .ci-dist-a --source-date-epoch 0
+          python scripts/build_release_artifacts.py --output .ci-dist-b --source-date-epoch 0
+          python scripts/verify_release_cell.py --wheel .ci-dist-a/autopulse-0.1.0-py3-none-any.whl --sdist .ci-dist-a/autopulse-0.1.0.tar.gz --wheelhouse .ci-wheelhouse --locked-requirements .ci-requirements.txt --summary .ci-summary.md --manifest-output .ci-wheelhouse.json
+          python -m pip install .
+          python scripts/generate_supply_chain_evidence.py --target-python python --wheel .ci-dist-a/autopulse-0.1.0-py3-none-any.whl --wheelhouse-manifest .ci-wheelhouse.json --locked-requirements .ci-requirements.txt --commit ${{ github.sha }} --output .ci-evidence --package autopulse --package jsonschema
+          python -m pytest -q
+      - name: Run fail-closed release gates (Windows)
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
         run: |
-          python -m py_compile \
-            src/autopulse/data/validator.py \
-            src/autopulse/analysis/circular_buffer.py \
-            src/autopulse/analysis/hdf_detector.py \
-            src/autopulse/analysis/osf_detector.py \
-            src/autopulse/analysis/pdm_processor.py \
-            src/autopulse/analysis/utils.py \
-            tests/simulation/virtual_replay.py \
-            tests/simulation/__init__.py \
-            src/autopulse/adapters.py \
-            src/autopulse/providers.py \
-            src/autopulse/noise.py \
-            src/autopulse/replayer.py \
-            src/autopulse/__init__.py \
-            src/autopulse/alert_exporter.py
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-release.txt -r requirements-dev.txt
+          python -m uv export --locked --all-extras --no-emit-project --format requirements-txt --output-file .ci-requirements.txt
+          python -m pip download --only-binary=:all: --dest .ci-wheelhouse -r .ci-requirements.txt
+          python scripts/build_release_artifacts.py --output .ci-dist-a --source-date-epoch 0
+          python scripts/build_release_artifacts.py --output .ci-dist-b --source-date-epoch 0
+          python scripts/verify_release_cell.py --wheel .ci-dist-a/autopulse-0.1.0-py3-none-any.whl --sdist .ci-dist-a/autopulse-0.1.0.tar.gz --wheelhouse .ci-wheelhouse --locked-requirements .ci-requirements.txt --summary .ci-summary.md --manifest-output .ci-wheelhouse.json
+          python -m pip install .
+          python scripts/generate_supply_chain_evidence.py --target-python python --wheel .ci-dist-a/autopulse-0.1.0-py3-none-any.whl --wheelhouse-manifest .ci-wheelhouse.json --locked-requirements .ci-requirements.txt --commit ${{ github.sha }} --output .ci-evidence --package autopulse --package jsonschema
+          python -m pytest -q
+      - name: Emit allowlist-built summary
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: |
+          python scripts/emit_ci_summary.py --source .ci-summary.md --commit ${{ github.sha }} --output $GITHUB_STEP_SUMMARY
+      - name: Emit allowlist-built summary (Windows)
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          python scripts/emit_ci_summary.py --source .ci-summary.md --commit ${{ github.sha }} --output $env:GITHUB_STEP_SUMMARY
 
-      - name: Run US-001 tests
-        run: python -m pytest tests/test_engine_data_contract.py -q
-
-      - name: Run US-002 tests
-        run: python -m pytest tests/test_us002_virtual_replay_harness.py -q
-
-      - name: Run US-003 tests
-        run: python -m pytest tests/test_us003_pdm_algorithms.py -q
-
-      - name: Run US-004 tests
-        run: python -m pytest tests/test_us004_smoothing.py -q
-
-      - name: Run US-005 tests
-        run: python -m pytest tests/test_us005_alert_exporter.py -q
+  docs:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: grubby-galaxy
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: grubby-galaxy/.nvmrc
+          cache: npm
+          cache-dependency-path: grubby-galaxy/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:smoke
+      - run: npm run test:e2e
