@@ -31,7 +31,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Callable, Iterator, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -330,6 +330,9 @@ class LogReplayer:
         adapter: MockAdapter,
         frequency_hz: int = 1,
         drift: float = 0.0,
+        *,
+        clock: Callable[[], float] = time.perf_counter,
+        sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         if frequency_hz <= 0:
             raise ValueError("frequency_hz must be positive.")
@@ -339,6 +342,8 @@ class LogReplayer:
         self._adapter = adapter
         self._frequency_hz = frequency_hz
         self._drift = drift
+        self._clock = clock
+        self._sleeper = sleeper
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self.frames: list[DataPacket] = []
@@ -375,16 +380,16 @@ class LogReplayer:
     def _run_loop(self, max_frames: Optional[int]) -> None:
         interval = 1.0 / self._frequency_hz
         count = 0
-        next_dispatch = time.perf_counter()
+        next_dispatch = self._clock()
         while self._running:
             if max_frames is not None and count >= max_frames:
                 self._running = False
                 break
-            t0 = time.perf_counter()
+            t0 = self._clock()
             self._dispatch_timestamps.append(t0)
             try:
                 if self._drift:
-                    time.sleep(self._drift)
+                    self._sleeper(self._drift)
                 frame = self._adapter.fetch_frame()
                 self.frames.append(frame)
             except StopIteration:
@@ -394,10 +399,10 @@ class LogReplayer:
                 self.errors.append(exc)
             next_dispatch += interval
             sleep_for = (
-                next_dispatch - time.perf_counter() - SLEEP_GUARD_SECONDS
+                next_dispatch - self._clock() - SLEEP_GUARD_SECONDS
             )
             if sleep_for > 0:
-                time.sleep(sleep_for)
+                self._sleeper(sleep_for)
             count += 1
 
     def join(self, timeout: float = 10.0) -> None:
@@ -413,6 +418,23 @@ class LogReplayer:
 # ─────────────────────────────────────────────────────────────────────────────
 # FIXTURES
 # ─────────────────────────────────────────────────────────────────────────────
+
+class DeterministicClock:
+    """Thread-safe virtual time for cadence assertions, independent of CI load."""
+
+    def __init__(self) -> None:
+        self._value = 0.0
+        self._lock = threading.Lock()
+
+    def now(self) -> float:
+        with self._lock:
+            return self._value
+
+    def sleep(self, seconds: float) -> None:
+        if seconds < 0:
+            raise ValueError("sleep duration must be non-negative")
+        with self._lock:
+            self._value += seconds
 
 _VIN = _make_vin_hash()
 
@@ -902,7 +924,13 @@ class TestLogReplayer1Hz:
         rows = [_good_row(engine_rpm=float(i * 100)) for i in range(8)]
         provider = JSONLProvider(rows)
         adapter = MockAdapter(provider)
-        replayer = LogReplayer(adapter, frequency_hz=1)
+        clock = DeterministicClock()
+        replayer = LogReplayer(
+            adapter,
+            frequency_hz=1,
+            clock=clock.now,
+            sleeper=clock.sleep,
+        )
         return replayer
 
     def test_1hz_frame_count_matches_dataset(self, replayer_1hz):
@@ -962,7 +990,13 @@ class TestLogReplayer10Hz:
         rows = [_good_row(engine_rpm=float(i * 50)) for i in range(30)]
         provider = JSONLProvider(rows)
         adapter = MockAdapter(provider)
-        replayer = LogReplayer(adapter, frequency_hz=10)
+        clock = DeterministicClock()
+        replayer = LogReplayer(
+            adapter,
+            frequency_hz=10,
+            clock=clock.now,
+            sleeper=clock.sleep,
+        )
         return replayer
 
     def test_10hz_frame_count_matches_dataset(self, replayer_10hz):

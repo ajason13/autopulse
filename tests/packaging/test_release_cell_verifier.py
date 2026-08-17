@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 import sys
 import zipfile
@@ -12,11 +13,30 @@ from scripts.verify_release_cell import (
 
 
 def _offline_environment() -> dict[str, str]:
-    return {
-        "PATH": str(Path(sys.executable).parent),
-        "PIP_NO_INDEX": "1",
-        "PIP_DISABLE_PIP_VERSION_CHECK": "1",
-    }
+    """Keep the host process usable while prohibiting pip network access."""
+    environment = dict(os.environ)
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONHOME", None)
+    environment["PIP_NO_INDEX"] = "1"
+    environment["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+    return environment
+
+
+def test_offline_environment_preserves_platform_process_settings(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("AUTOPULSE_RELEASE_CELL_TEST_MARKER", "preserved")
+    monkeypatch.setenv("PYTHONPATH", "must-not-leak")
+    monkeypatch.setenv("PYTHONHOME", "must-not-leak")
+
+    environment = _offline_environment()
+
+    assert environment["AUTOPULSE_RELEASE_CELL_TEST_MARKER"] == "preserved"
+    assert "PATH" in environment
+    assert "PYTHONPATH" not in environment
+    assert "PYTHONHOME" not in environment
+    assert environment["PIP_NO_INDEX"] == "1"
+    assert environment["PIP_DISABLE_PIP_VERSION_CHECK"] == "1"
 
 
 def _write_minimal_wheel(wheelhouse: Path) -> Path:
