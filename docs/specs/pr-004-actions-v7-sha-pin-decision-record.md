@@ -1,7 +1,7 @@
 # PR-004: audited GitHub Actions v7 SHA-pin upgrade
 
 **Status:** Claude pre-implementation `MINOR FIXES` addressed; implementation
-awaits local and hosted verification and final Claude audit.
+has passed local and hosted verification; final Claude audit remains required.
 **Checked:** 2026-08-17.
 **Scope:** GitHub Actions supply-chain references only; no AutoPulse runtime, diagnostic, telemetry, replay, VIN, or observability behavior changes.
 
@@ -93,3 +93,11 @@ Claude also disclosed a pre-existing, out-of-scope Pages deployment concern:
 `deploy-docs.yml` uses floating `ubuntu-latest` runner labels. PR-004 must not
 change runner labels; track it as a separate infrastructure decision before a
 future runner-image migration.
+
+## Hosted verification
+
+GitHub Actions run `32108465018` passed the docs job and all eight required
+release-gate cells: Ubuntu 24.04 x64 (CPython 3.13/3.14), macOS 15 ARM64
+(3.13/3.14), macOS 15 Intel (3.13/3.14), and Windows Server x64
+(3.13/3.14). The Windows results remain compatibility evidence only, not
+Windows 11 desktop validation.
