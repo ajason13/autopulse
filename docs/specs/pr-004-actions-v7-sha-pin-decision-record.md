@@ -1,7 +1,6 @@
 # PR-004: audited GitHub Actions v7 SHA-pin upgrade
 
-**Status:** Claude pre-implementation `MINOR FIXES` addressed; implementation
-has passed local and hosted verification; final Claude audit remains required.
+**Status:** Claude-approved for PR-004 merge; local and hosted gates passed.
 **Checked:** 2026-08-17.
 **Scope:** GitHub Actions supply-chain references only; no AutoPulse runtime, diagnostic, telemetry, replay, VIN, or observability behavior changes.
 
@@ -96,8 +95,18 @@ future runner-image migration.
 
 ## Hosted verification
 
-GitHub Actions run `32108465018` passed the docs job and all eight required
-release-gate cells: Ubuntu 24.04 x64 (CPython 3.13/3.14), macOS 15 ARM64
-(3.13/3.14), macOS 15 Intel (3.13/3.14), and Windows Server x64
+GitHub Actions run `32108791619`, tied to PR head
+`dc2fe632a535a4d4bedc7aacc0f17e7db5bf53ca`, passed the docs job and all eight
+required release-gate cells: Ubuntu 24.04 x64 (CPython 3.13/3.14), macOS 15
+ARM64 (3.13/3.14), macOS 15 Intel (3.13/3.14), and Windows Server x64
 (3.13/3.14). The Windows results remain compatibility evidence only, not
 Windows 11 desktop validation.
+
+## Final audit
+
+Claude's final source-grounded implementation audit returned
+`APPROVED FOR PR-004 MERGE`, contingent on independently confirming hosted
+evidence. The auditor verified the six permitted workflow-line changes,
+adversarially exercised the MF-01/MF-02/MF-03 negative paths, and found no
+out-of-scope source changes. Codex independently confirmed the current-head
+run and its nine successful job conclusions above, satisfying that contingency.
