@@ -87,6 +87,16 @@ the installed sharp package set reported `Apache-2.0` (`sharp` and
 prior sharp native package path; it is a targeted check, not an all-platform
 Node SBOM/license gate.
 
+**Implementation evidence (2026-08-21):** commit
+`3b95c1623b6d526d76f76ef00028a91efa595f1f` updates `sharp` to `^0.35.3`,
+adds the unconditional docs production audit gate, adds bypass-resistance
+contract coverage, and adds committed PR-005 artifacts. Local Node 24.15.0 /
+npm 11.17.0 checks passed: `npm ci`; production audit with zero findings; docs
+build; smoke `6 passed, 2 skipped`; e2e `48 passed, 2 skipped`; and focused
+CI-contract tests `3 passed`. The invalid nonfunctional `set -o +errexit`
+matcher was removed before source audit. A remote source-grounded Claude audit
+is still required; this evidence is not a new RC or release claim.
+
 ## Decision, provenance, and authority
 
 This exercise validates the educational offline/replay package profile only;
