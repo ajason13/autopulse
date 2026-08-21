@@ -29,7 +29,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=9,<10",
+  "pytest>=9.1.1,<10",
 ]
 release = [
   "build==1.5.0",
