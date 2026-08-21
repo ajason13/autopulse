@@ -24,7 +24,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
-  "jsonschema>=4.23,<5",
+  "jsonschema>=4.26.0,<5",
 ]
 
 [project.optional-dependencies]
