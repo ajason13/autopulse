@@ -38,7 +38,7 @@ release = [
   "pip-audit==2.10.1",
   "pip-licenses==5.5.5",
   "twine==6.2.0",
-  "uv==0.11.32",
+  "uv==0.12.5",
 ]
 
 [project.scripts]
