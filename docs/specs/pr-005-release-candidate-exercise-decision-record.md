@@ -114,6 +114,17 @@ dependency/CI/documentation change only; hosted CI and ordinary PR review
 remain pending, and no new RC identifier, tag, release, publication,
 deployment, or runtime change is authorized.
 
+**Hosted correction (2026-08-22):** PR #76 run `32553311457` passed all eight
+Python release cells but failed the docs job at `npm ci`, before the new audit
+step. GitHub's npm reported five missing sharp optional platform records:
+Linux ppc64/riscv64 libvips and binaries, plus Windows arm64. npm 11 generated
+a platform-pruned lock on macOS. A clean npm 10.9.2 package-manager generation
+from `package.json` supplied the exact npm-generated records; only those five
+missing records were added to the otherwise audited sharp 0.35.3 lock, so no
+unrelated allowed-range upgrades were accepted. Local Node 24/npm 11 `npm ci`
+and the production high-threshold audit then passed. A fresh source audit and
+full hosted PR run are required; the failed run is invalid evidence.
+
 ## Decision, provenance, and authority
 
 This exercise validates the educational offline/replay package profile only;
