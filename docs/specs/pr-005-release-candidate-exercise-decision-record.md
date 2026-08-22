@@ -106,6 +106,14 @@ including archival prompts, `CONTEXT.md`, and the retired historical draft.
 The full manifest is now a required packet section; a focused disclosure
 re-review is pending. No runtime, release, or new-RC action is approved.
 
+**Disclosure re-review (2026-08-21):** Claude source-verified the
+complete-manifest correction at
+`ddc3ad0eb458370348a5f1a4b1c8760cfb9baea0` and returned `APPROVED FOR
+COMMIT`. All remediation findings are closed. This approves the scoped
+dependency/CI/documentation change only; hosted CI and ordinary PR review
+remain pending, and no new RC identifier, tag, release, publication,
+deployment, or runtime change is authorized.
+
 ## Decision, provenance, and authority
 
 This exercise validates the educational offline/replay package profile only;
