@@ -122,8 +122,13 @@ a platform-pruned lock on macOS. A clean npm 10.9.2 package-manager generation
 from `package.json` supplied the exact npm-generated records; only those five
 missing records were added to the otherwise audited sharp 0.35.3 lock, so no
 unrelated allowed-range upgrades were accepted. Local Node 24/npm 11 `npm ci`
-and the production high-threshold audit then passed. A fresh source audit and
-full hosted PR run are required; the failed run is invalid evidence.
+and the production high-threshold audit then passed. Corrected PR #76 run
+`32554008022` is one `pull_request` run at
+`23e6cb58ecbe37248e83bde46f059bae3025852d`; its docs job passed `npm ci`,
+the high-threshold production audit, build, smoke, and e2e, and all eight
+package cells passed. The correction source audit remains required; the failed
+run remains invalid evidence and this remediation evidence is not an RC or
+release-readiness claim.
 
 ## Decision, provenance, and authority
 
