@@ -97,6 +97,15 @@ CI-contract tests `3 passed`. The invalid nonfunctional `set -o +errexit`
 matcher was removed before source audit. A remote source-grounded Claude audit
 is still required; this evidence is not a new RC or release claim.
 
+**Implementation audit (2026-08-21):** Claude source-verified commit
+`c648031ff3fba5f5a310a212f76526692f6515cc` and returned `APPROVED WITH MINOR
+FIXES`. The sharp update, CI gate, contract test, documentation, local test
+claim, and three adversarial workflow mutations were verified. The only
+finding was that the audit packet did not enumerate all 16 changed files,
+including archival prompts, `CONTEXT.md`, and the retired historical draft.
+The full manifest is now a required packet section; a focused disclosure
+re-review is pending. No runtime, release, or new-RC action is approved.
+
 ## Decision, provenance, and authority
 
 This exercise validates the educational offline/replay package profile only;
