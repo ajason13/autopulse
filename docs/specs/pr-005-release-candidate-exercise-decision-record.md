@@ -130,6 +130,23 @@ package cells passed. The correction source audit remains required; the failed
 run remains invalid evidence and this remediation evidence is not an RC or
 release-readiness claim.
 
+**Correction source audit (2026-08-23, post-merge):** Claude returned
+`APPROVED FOR COMMIT` for the cross-platform lock correction. It directly
+verified that the five added `package-lock.json` records are the only added
+package keys, no pre-existing package version changed, and each integrity
+value matches the live npm registry. It also confirmed the direct `sharp`
+version, immutable action pins, unconditional production audit gate, and
+workflow-contract test are unchanged. The audit was completed after PR #76
+was squash-merged to `main` as
+`ae47d9d54a718cfe2bd3f5f2adfc632cb164790e`; this is recorded as a process
+timing limitation, not as retroactive merge authorization. Claude disclosed
+that Actions API rate limiting prevented direct confirmation of run
+`32554008022`; its ancestry and lockfile evidence corroborated that run, and
+the final PR-head run `32554209951` independently passed all eight package
+cells plus docs. This verdict approves only the narrow remediation and does
+not authorize an RC, tag, release, publication, deployment, runtime change,
+or Windows 11 claim.
+
 ## Decision, provenance, and authority
 
 This exercise validates the educational offline/replay package profile only;
