@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+import subprocess
 import sys
 import tomllib
 
@@ -14,7 +15,7 @@ def test_project_metadata_exposes_only_offline_console_script() -> None:
     metadata = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
     assert metadata["project"]["requires-python"] == ">=3.13,<3.15"
     assert metadata["project"]["scripts"] == {"autopulse-debug": "autopulse.debug:main"}
-    assert metadata["project"]["dependencies"] == ["jsonschema>=4.23,<5"]
+    assert metadata["project"]["dependencies"] == ["jsonschema>=4.26.0,<5"]
     assert "release" in metadata["project"]["optional-dependencies"]
 
 
@@ -23,6 +24,17 @@ def test_build_configuration_excludes_live_package_from_both_artifacts() -> None
     for target in ("sdist", "wheel"):
         excluded = metadata["tool"]["hatch"]["build"]["targets"][target]["exclude"]
         assert "/src/autopulse/live/**" in excluded
+
+
+def test_committed_project_declarations_match_uv_lock() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "uv", "export", "--locked", "--all-extras", "--no-emit-project", "--format", "requirements-txt"],
+        cwd=REPOSITORY,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_offline_package_has_no_unexpected_third_party_imports() -> None:
