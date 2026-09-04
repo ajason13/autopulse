@@ -1,6 +1,6 @@
 # Release tooling is exact-pinned here; uv.lock and per-cell hashed exports are
 # the installation authority once generated on supported CPython 3.13/3.14.
-build==1.5.0
+build==1.6.0
 check-wheel-contents==0.6.3
 cyclonedx-bom==7.3.1
 hatchling==1.32.0
