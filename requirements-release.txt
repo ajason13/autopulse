@@ -2,7 +2,7 @@
 # the installation authority once generated on supported CPython 3.13/3.14.
 build==1.5.0
 check-wheel-contents==0.6.3
-cyclonedx-bom==7.3.1
+cyclonedx-bom==7.5.0
 hatchling==1.32.0
 pip-audit==2.10.1
 pip-licenses==5.5.5
