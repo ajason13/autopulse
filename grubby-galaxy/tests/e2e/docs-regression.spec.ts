@@ -65,6 +65,16 @@ test('search dialog opens and accepts a query', async ({ page }) => {
 	await expect(searchInput).toHaveValue('US-006');
 });
 
+test('architecture diagram renders its pipeline with Mermaid', async ({ page }) => {
+	await page.goto(`${basePath}reference/architecture/`);
+
+	const diagram = page.locator('pre.mermaid svg');
+	await expect(diagram).toBeVisible({ timeout: 15_000 });
+	await expect(diagram).toContainText('Data Ingestion Layer');
+	await expect(diagram).toContainText('Validation & Security');
+	await expect(diagram).toContainText('Drop & Log');
+});
+
 test.describe('Internal link base-path regression', () => {
 	for (const route of docsRoutes) {
 		test(`${route.path} internal links stay under /autopulse/ and resolve`, async ({ page }) => {
