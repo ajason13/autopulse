@@ -1,6 +1,6 @@
 # Real Vehicle Read-Only Smoke Harness
 
-Status: Implemented and merged via PR #33. Claude re-review passed; stationary ICE smoke test is conditionally allowed only under the operator checklist.
+Status: Implemented and merged via PR #33. PR #36 added explicit protocol `6` live-adapter connection settings. Stationary ICE smoke test is conditionally allowed only under the operator checklist, confirmed protocol compatibility, and successful dry-run.
 
 ## Purpose
 

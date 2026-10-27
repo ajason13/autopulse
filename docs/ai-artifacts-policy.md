@@ -1,13 +1,15 @@
 # AI Artifact Policy
 
-AutoPulse intentionally documents its multi-agent SDLC, but not every AI-related file belongs in the public repository.
+AutoPulse documents durable engineering decisions, but not every AI-related file
+belongs in the public repository.
 
 ## Public Repository Artifacts
 
 Keep these artifacts public when they are sanitized and useful to contributors:
 
-- `AGENTS.md`: repository governance, role ownership, merge gates, and operating rules.
-- `CONTEXT.md`: durable public project status, decisions, constraints, and verification summaries.
+- `AGENTS.md`: concise repository guidance, safety boundaries, and verification
+  expectations.
+- `docs/history/`: archived task status, decisions, and verification evidence.
 - `docs/prompts/`: curated reusable prompts that do not depend on private workspaces or local state.
 - `docs/codex-skills/`: reviewable source copies for reusable Codex skills.
 - `docs/qa/`, `docs/specs/`, and Starlight docs: durable specifications, QA plans, and public implementation references.
@@ -30,4 +32,6 @@ Use `LOCAL_CONTEXT.md` or `docs/prompts/local/` for private continuation notes t
 
 Default to public when an artifact is durable, sanitized, and useful to future contributors. Default to local-only when it contains private links, live task coordination, local branch state, raw transcripts, or tool/session state.
 
-If a local-only artifact contains a durable decision, extract the decision into `CONTEXT.md`, `docs/specs/`, `docs/qa/`, or public Starlight docs in a sanitized form.
+If a local-only artifact contains a durable decision, extract it into a focused
+`docs/specs/`, `docs/qa/`, or public Starlight document in sanitized form. Do
+not recreate a repository-wide active-context file.
