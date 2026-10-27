@@ -1,6 +1,6 @@
 # Real Vehicle Smoke Harness Operator Checklist
 
-Status: Required before any stationary vehicle smoke test. Claude re-review passed after PR #33; use is conditional on this checklist and a successful dry-run.
+Status: Required before any stationary vehicle smoke test. Claude re-review passed after PR #33, and PR #36 merged explicit protocol `6` live-adapter connection settings. Use is conditional on this checklist, confirmed protocol compatibility, and a successful dry-run.
 
 ## Preflight
 
@@ -45,4 +45,4 @@ PYTHONPATH=src python3 -m autopulse.live.cli \
   --confirmed-stationary
 ```
 
-Run `--dry-run` first. Do not run against a real vehicle until Claude signs off on the implementation.
+Run `--dry-run` first. It validates configuration without opening the adapter; it does not verify hardware connectivity or vehicle protocol compatibility. Do not run against a real vehicle unless protocol `6` compatibility is confirmed and every preflight item above is satisfied.

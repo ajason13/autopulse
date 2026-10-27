@@ -5,8 +5,8 @@ An educational, read-only OBD-II anomaly detection framework that learns a vehic
 ## Project Vitals
 
 - Mission: Detect statistical drift in read-only OBD-II telemetry before diagnostic trouble codes appear.
-- Governance: See [AGENTS.md](AGENTS.md) for the 2026 Multi-LLM engineering model and merge handshake.
-- Notion: [AutoPulse Project Hub](https://www.notion.so/353834a0c8a680cfaab3dd2750ff730d)
+- Governance: See [AGENTS.md](AGENTS.md) for current repository constraints and verification.
+- Codex sessions: [Start, continue, and troubleshoot](docs/codex-sessions.md).
 - Primary domains: OBD-II ingestion, virtual replay, statistical anomaly scoring, and adversarial validation.
 
 ## Repository Layout
