@@ -8,7 +8,7 @@ Covers:
   - Protocol agnosticism (JSONL + CSV providers)
   - US-001 schema boundary enforcement as perceived by the harness layer
   - Security red-line injection detection
-  - Edge cases: empty datasets, malformed rows, loop/memory stability
+  - Edge cases: empty datasets, malformed rows, bounded provider indexing
 
 Run with:
     pytest test_us002_virtual_replay_harness.py -v --tb=short
@@ -17,7 +17,6 @@ Run with:
 from __future__ import annotations
 
 import csv
-import io
 import json
 import os
 import re
@@ -25,54 +24,35 @@ import shutil
 import statistics
 import subprocess
 import sys
-import time
 import threading
-import uuid
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterator, Optional
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
 import pytest
-from jsonschema import ValidationError as JsonSchemaValidationError
+from jsonschema import ValidationError
 
-from tests.simulation import (
-    CandidParser as ProdCandidParser,
-    DataPacket as ProdDataPacket,
-    JSONLProvider as ProdJSONLProvider,
-    LogReplayer as ProdLogReplayer,
-    MockAdapter as ProdMockAdapter,
+import autopulse.virtual_replay as replay_module
+from autopulse.virtual_replay import (
+    CSVProvider,
+    CandidParser,
+    DataPacket,
+    JSONLProvider,
+    LogReplayer,
+    MockAdapter,
+    NoiseGenerator,
+    SecurityViolationError,
 )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PRODUCTION STUBS
-# These represent the actual AutoPulse interfaces under test.
-# Replace with real imports when the production modules exist, e.g.:
-#   from autopulse.adapters import MockAdapter, LogReplayer, OBDAdapter
-#   from autopulse.providers import CSVProvider, JSONLProvider
-#   from autopulse.noise import NoiseGenerator
-# ─────────────────────────────────────────────────────────────────────────────
-
+# Independent expected values for the replay-facing US-001 contract.
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 
 VALID_PROTOCOLS = ["J1979_MODE01", "J1979_2_SERVICE22"]
-SLEEP_GUARD_SECONDS = 0.002
 
 US001_REQUIRED_FIELDS = {
     "timestamp", "vin_hashed", "protocol",
     "engine_rpm", "vehicle_speed", "coolant_temp",
     "engine_load", "stft_bank1", "ltft_bank1",
-}
-
-US001_BOUNDS: dict[str, tuple[float, float]] = {
-    "engine_rpm":    (0.0,   9500.0),
-    "vehicle_speed": (0,     255),
-    "coolant_temp":  (-40.0, 140.0),
-    "engine_load":   (0.0,   100.0),
-    "stft_bank1":    (-50.0, 50.0),
-    "ltft_bank1":    (-50.0, 50.0),
 }
 
 RESTRICTED_SERVICES = {
@@ -83,336 +63,6 @@ RESTRICTED_SERVICES = {
     "0x2E",   # UDS WriteDataByIdentifier
     "0x10",   # UDS DiagnosticSessionControl (programming)
 }
-
-
-@dataclass
-class DataPacket:
-    """Normalised US-001 sensor frame returned by any OBDAdapter."""
-    timestamp: str
-    vin_hashed: str
-    protocol: str
-    engine_rpm: float
-    vehicle_speed: int
-    coolant_temp: float
-    engine_load: float
-    stft_bank1: float
-    ltft_bank1: float
-    _raw: dict = field(default_factory=dict, repr=False)
-
-    def to_dict(self) -> dict:
-        return {
-            "timestamp":     self.timestamp,
-            "vin_hashed":    self.vin_hashed,
-            "protocol":      self.protocol,
-            "engine_rpm":    self.engine_rpm,
-            "vehicle_speed": self.vehicle_speed,
-            "coolant_temp":  self.coolant_temp,
-            "engine_load":   self.engine_load,
-            "stft_bank1":    self.stft_bank1,
-            "ltft_bank1":    self.ltft_bank1,
-        }
-
-
-class ValidationError(Exception):
-    """Raised when a DataPacket violates the US-001 schema."""
-
-
-class SecurityViolationError(Exception):
-    """Raised when a restricted service ID is detected."""
-
-
-class LogProvider(ABC):
-    @abstractmethod
-    def get_next_row(self) -> dict:
-        ...
-
-    @abstractmethod
-    def reset(self) -> None:
-        ...
-
-
-class JSONLProvider(LogProvider):
-    def __init__(self, data: list[dict]) -> None:
-        self._data = data
-        self._idx = 0
-
-    def get_next_row(self) -> dict:
-        if self._idx >= len(self._data):
-            raise StopIteration
-        row = self._data[self._idx]
-        self._idx += 1
-        return row
-
-    def reset(self) -> None:
-        self._idx = 0
-
-
-class CSVProvider(LogProvider):
-    def __init__(self, rows: list[dict]) -> None:
-        self._rows = rows
-        self._idx = 0
-
-    def get_next_row(self) -> dict:
-        if self._idx >= len(self._rows):
-            raise StopIteration
-        row = self._rows[self._idx]
-        self._idx += 1
-        return {k: self._coerce(k, v) for k, v in row.items()}
-
-    def reset(self) -> None:
-        self._idx = 0
-
-    @staticmethod
-    def _coerce(key: str, value: str):
-        float_keys = {"engine_rpm", "coolant_temp", "engine_load", "stft_bank1", "ltft_bank1"}
-        int_keys   = {"vehicle_speed"}
-        if key in float_keys:
-            return float(value)
-        if key in int_keys:
-            return int(value)
-        return value
-
-
-class NoiseGenerator:
-    """Decorates raw rows with adversarial mutations before normalisation."""
-
-    @staticmethod
-    def pid_drop(row: dict, field: str) -> dict:
-        mutated = dict(row)
-        mutated[field] = None
-        return mutated
-
-    @staticmethod
-    def out_of_bounds(row: dict, field: str, value) -> dict:
-        mutated = dict(row)
-        mutated[field] = value
-        return mutated
-
-    @staticmethod
-    def inject_restricted_service(row: dict, service_id: str) -> dict:
-        mutated = dict(row)
-        mutated["__service_id__"] = service_id
-        return mutated
-
-
-def _make_timestamp() -> str:
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
-
-
-def _make_vin_hash() -> str:
-    import hashlib
-    return hashlib.sha256(uuid.uuid4().bytes).hexdigest()
-
-
-class MockAdapter:
-    """
-    Implements OBDAdapter via a LogProvider.
-    Normalises raw rows into validated DataPackets (US-001).
-    Enforces security red-lines on every frame.
-    """
-
-    _DEFAULT_VIN = _make_vin_hash()
-    _DEFAULT_PROTOCOL = "J1979_MODE01"
-
-    def __init__(self, provider: LogProvider, loop: bool = False) -> None:
-        self._provider = provider
-        self._loop = loop
-        self._connected = False
-        self._security_violations: list[str] = []
-
-    def connect(self) -> None:
-        self._connected = True
-
-    def disconnect(self) -> None:
-        self._connected = False
-
-    @property
-    def security_violations(self) -> list[str]:
-        return list(self._security_violations)
-
-    def fetch_frame(self) -> DataPacket:
-        if not self._connected:
-            raise RuntimeError("Adapter not connected. Call connect() first.")
-        while True:
-            try:
-                raw = self._provider.get_next_row()
-            except StopIteration:
-                if self._loop:
-                    self._provider.reset()
-                    raw = self._provider.get_next_row()
-                else:
-                    raise
-
-            # ── Security gate ───────────────────────────────────────────────
-            service_id = raw.get("__service_id__")
-            if service_id is not None:
-                formatted_service_id = self._format_service_id(service_id)
-                if formatted_service_id in RESTRICTED_SERVICES:
-                    self._security_violations.append(formatted_service_id)
-                    raise SecurityViolationError(
-                        "SECURITY_VIOLATION_RED_LINE: restricted service "
-                        f"{formatted_service_id}"
-                    )
-
-            # ── Validate & normalise ─────────────────────────────────────────
-            return self._normalise(raw)
-
-    @staticmethod
-    def _format_service_id(service_id) -> str:
-        if isinstance(service_id, str):
-            if service_id.lower().startswith("0x"):
-                value = int(service_id, 16)
-            else:
-                value = int(service_id)
-        else:
-            value = int(service_id)
-        return f"0x{value:02X}"
-
-    def _normalise(self, raw: dict) -> DataPacket:
-        ts         = raw.get("timestamp") or _make_timestamp()
-        vin        = raw.get("vin_hashed") or self._DEFAULT_VIN
-        protocol   = raw.get("protocol") or self._DEFAULT_PROTOCOL
-
-        # Validate required numeric fields (nulls → ValidationError)
-        numerics = {
-            "engine_rpm":    raw.get("engine_rpm"),
-            "vehicle_speed": raw.get("vehicle_speed"),
-            "coolant_temp":  raw.get("coolant_temp"),
-            "engine_load":   raw.get("engine_load"),
-            "stft_bank1":    raw.get("stft_bank1"),
-            "ltft_bank1":    raw.get("ltft_bank1"),
-        }
-        for fname, val in numerics.items():
-            if val is None:
-                raise ValidationError(f"Required field '{fname}' is null/missing.")
-
-        # Physics-based bounds check
-        for fname, (lo, hi) in US001_BOUNDS.items():
-            val = numerics[fname]
-            if not (lo <= val <= hi):
-                raise ValidationError(
-                    f"Field '{fname}' value {val} out of bounds [{lo}, {hi}]."
-                )
-
-        # VIN hash format
-        if not SHA256_PATTERN.match(vin):
-            raise ValidationError(f"vin_hashed '{vin}' is not a valid SHA-256 hex string.")
-
-        # Protocol enum
-        if protocol not in VALID_PROTOCOLS:
-            raise ValidationError(
-                f"protocol '{protocol}' not in allowed set {VALID_PROTOCOLS}."
-            )
-
-        return DataPacket(
-            timestamp=ts,
-            vin_hashed=vin,
-            protocol=protocol,
-            engine_rpm=float(numerics["engine_rpm"]),
-            vehicle_speed=int(numerics["vehicle_speed"]),
-            coolant_temp=float(numerics["coolant_temp"]),
-            engine_load=float(numerics["engine_load"]),
-            stft_bank1=float(numerics["stft_bank1"]),
-            ltft_bank1=float(numerics["ltft_bank1"]),
-            _raw=raw,
-        )
-
-
-class LogReplayer:
-    """
-    Drives a MockAdapter at a configurable Hz rate.
-    Collected frames and inter-frame timestamps are available post-run.
-    """
-
-    def __init__(
-        self,
-        adapter: MockAdapter,
-        frequency_hz: int = 1,
-        drift: float = 0.0,
-        *,
-        clock: Callable[[], float] = time.perf_counter,
-        sleeper: Callable[[float], None] = time.sleep,
-    ) -> None:
-        if frequency_hz <= 0:
-            raise ValueError("frequency_hz must be positive.")
-        if drift < 0:
-            raise ValueError("drift must be non-negative.")
-        self._validate_drift_budget(frequency_hz, drift)
-        self._adapter = adapter
-        self._frequency_hz = frequency_hz
-        self._drift = drift
-        self._clock = clock
-        self._sleeper = sleeper
-        self._running = False
-        self._thread: Optional[threading.Thread] = None
-        self.frames: list[DataPacket] = []
-        self.errors: list[Exception] = []
-        self._dispatch_timestamps: list[float] = []
-
-    def set_speed(self, multiplier: float) -> None:
-        if multiplier <= 0:
-            raise ValueError("Speed multiplier must be positive.")
-        self._frequency_hz = round(self._frequency_hz * multiplier)
-        if self._frequency_hz <= 0:
-            raise ValueError("Speed multiplier produced zero frequency.")
-        self._validate_drift_budget(self._frequency_hz, self._drift)
-
-    @staticmethod
-    def _validate_drift_budget(frequency_hz: int, drift: float) -> None:
-        if drift >= 1.0 / frequency_hz:
-            raise ValueError("drift must be less than the frame interval.")
-
-    def start(self, max_frames: Optional[int] = None) -> None:
-        self._running = True
-        self._adapter.connect()
-        self._thread = threading.Thread(
-            target=self._run_loop, args=(max_frames,), daemon=True
-        )
-        self._thread.start()
-
-    def stop(self) -> None:
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=5.0)
-        self._adapter.disconnect()
-
-    def _run_loop(self, max_frames: Optional[int]) -> None:
-        interval = 1.0 / self._frequency_hz
-        count = 0
-        next_dispatch = self._clock()
-        while self._running:
-            if max_frames is not None and count >= max_frames:
-                self._running = False
-                break
-            t0 = self._clock()
-            self._dispatch_timestamps.append(t0)
-            try:
-                if self._drift:
-                    self._sleeper(self._drift)
-                frame = self._adapter.fetch_frame()
-                self.frames.append(frame)
-            except StopIteration:
-                self._running = False
-                break
-            except Exception as exc:
-                self.errors.append(exc)
-            next_dispatch += interval
-            sleep_for = (
-                next_dispatch - self._clock() - SLEEP_GUARD_SECONDS
-            )
-            if sleep_for > 0:
-                self._sleeper(sleep_for)
-            count += 1
-
-    def join(self, timeout: float = 10.0) -> None:
-        if self._thread:
-            self._thread.join(timeout=timeout)
-
-    @property
-    def inter_frame_intervals(self) -> list[float]:
-        ts = self._dispatch_timestamps
-        return [ts[i+1] - ts[i] for i in range(len(ts) - 1)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -436,7 +86,24 @@ class DeterministicClock:
         with self._lock:
             self._value += seconds
 
-_VIN = _make_vin_hash()
+
+@pytest.fixture()
+def replay_clock(monkeypatch):
+    """Replace only production replay's time dependency, not its scheduler.
+
+    Patching the module binding avoids replacing the process-wide time.sleep
+    used by pytest and other threads. The real worker thread still runs.
+    """
+    clock = DeterministicClock()
+    monkeypatch.setattr(
+        replay_module,
+        "time",
+        SimpleNamespace(perf_counter=clock.now, sleep=clock.sleep),
+    )
+    return clock
+
+
+_VIN = "a" * 64
 
 def _good_row(**overrides) -> dict:
     base = {
@@ -758,15 +425,15 @@ class TestOutOfBoundsNoise:
 
     def test_vehicle_speed_float_oob_names_bounds_in_production(self):
         row = NoiseGenerator.out_of_bounds(_good_row(), "vehicle_speed", 256.5)
-        adapter = ProdMockAdapter(ProdJSONLProvider([row]))
+        adapter = MockAdapter(JSONLProvider([row]))
         adapter.connect()
-        with pytest.raises(JsonSchemaValidationError, match="out of bounds"):
+        with pytest.raises(ValidationError, match="out of bounds"):
             adapter.fetch_frame()
         adapter.disconnect()
 
     def test_vehicle_speed_integral_float_is_normalized_in_production(self):
         row = _good_row(vehicle_speed=60.0)
-        adapter = ProdMockAdapter(ProdJSONLProvider([row]))
+        adapter = MockAdapter(JSONLProvider([row]))
         adapter.connect()
         frame = adapter.fetch_frame()
         assert frame.vehicle_speed == 60
@@ -829,15 +496,6 @@ class TestSecurityRedLines:
         adapter = MockAdapter(JSONLProvider([row]))
         adapter.connect()
         with pytest.raises(SecurityViolationError):
-            adapter.fetch_frame()
-        adapter.disconnect()
-
-    @pytest.mark.parametrize("service_id", [8, 0x31, 49])
-    def test_integer_restricted_service_blocked_in_production(self, service_id):
-        row = NoiseGenerator.inject_restricted_service(_good_row(), service_id)
-        adapter = ProdMockAdapter(ProdJSONLProvider([row]))
-        adapter.connect()
-        with pytest.raises(Exception, match="SECURITY_VIOLATION_RED_LINE"):
             adapter.fetch_frame()
         adapter.disconnect()
 
@@ -920,16 +578,13 @@ class TestLogReplayer1Hz:
     _TOLERANCE = 0.05
 
     @pytest.fixture()
-    def replayer_1hz(self):
+    def replayer_1hz(self, replay_clock):
         rows = [_good_row(engine_rpm=float(i * 100)) for i in range(8)]
         provider = JSONLProvider(rows)
         adapter = MockAdapter(provider)
-        clock = DeterministicClock()
         replayer = LogReplayer(
             adapter,
             frequency_hz=1,
-            clock=clock.now,
-            sleeper=clock.sleep,
         )
         return replayer
 
@@ -944,7 +599,7 @@ class TestLogReplayer1Hz:
         replayer_1hz.join(timeout=12.0)
         replayer_1hz.stop()
         intervals = replayer_1hz.inter_frame_intervals
-        assert len(intervals) >= 3, "Not enough intervals to assess timing."
+        assert len(intervals) == 7
         mean_interval = statistics.mean(intervals)
         assert self._EXPECTED * (1 - self._TOLERANCE) <= mean_interval <= self._EXPECTED * (1 + self._TOLERANCE), (
             f"Mean 1Hz interval {mean_interval:.4f}s outside ±5% of {self._EXPECTED}s"
@@ -986,16 +641,13 @@ class TestLogReplayer10Hz:
     _TOLERANCE = 0.05
 
     @pytest.fixture()
-    def replayer_10hz(self):
+    def replayer_10hz(self, replay_clock):
         rows = [_good_row(engine_rpm=float(i * 50)) for i in range(30)]
         provider = JSONLProvider(rows)
         adapter = MockAdapter(provider)
-        clock = DeterministicClock()
         replayer = LogReplayer(
             adapter,
             frequency_hz=10,
-            clock=clock.now,
-            sleeper=clock.sleep,
         )
         return replayer
 
@@ -1010,7 +662,7 @@ class TestLogReplayer10Hz:
         replayer_10hz.join(timeout=6.0)
         replayer_10hz.stop()
         intervals = replayer_10hz.inter_frame_intervals
-        assert len(intervals) >= 5, "Not enough intervals to assess 10Hz timing."
+        assert len(intervals) == 29
         mean_interval = statistics.mean(intervals)
         assert self._EXPECTED * (1 - self._TOLERANCE) <= mean_interval <= self._EXPECTED * (1 + self._TOLERANCE), (
             f"Mean 10Hz interval {mean_interval:.4f}s outside ±5% of {self._EXPECTED}s"
@@ -1102,8 +754,8 @@ class TestLogReplayerModes:
             replayer.set_speed(0.4)
 
     def test_production_replayer_preserves_frequency_when_drift_rejects_speed(self):
-        adapter = ProdMockAdapter(ProdJSONLProvider([]))
-        replayer = ProdLogReplayer(adapter, frequency_hz=1, drift=0.75)
+        adapter = MockAdapter(JSONLProvider([]))
+        replayer = LogReplayer(adapter, frequency_hz=1, drift=0.75)
 
         with pytest.raises(ValueError, match="frame interval"):
             replayer.set_speed(2)
@@ -1120,8 +772,8 @@ class TestLogReplayerModes:
 
     def test_drift_under_interval_is_allowed_in_production(self):
         rows = [_good_row()]
-        adapter = ProdMockAdapter(ProdJSONLProvider(rows))
-        replayer = ProdLogReplayer(adapter, frequency_hz=10, drift=0.05)
+        adapter = MockAdapter(JSONLProvider(rows))
+        replayer = LogReplayer(adapter, frequency_hz=10, drift=0.05)
         assert replayer._drift == 0.05
 
     @pytest.mark.parametrize(
@@ -1134,8 +786,8 @@ class TestLogReplayerModes:
         expected_interval_count,
     ):
         rows = [_good_row() for _ in range(frame_count)]
-        adapter = ProdMockAdapter(ProdJSONLProvider(rows))
-        replayer = ProdLogReplayer(adapter, frequency_hz=100)
+        adapter = MockAdapter(JSONLProvider(rows))
+        replayer = LogReplayer(adapter, frequency_hz=100)
         replayer.start()
         replayer.join(timeout=1.0)
         replayer.stop()
@@ -1171,7 +823,7 @@ class TestLogReplayerModes:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GROUP 8 – Replay Looping & Memory Stability
+# GROUP 8 – Replay Looping & Provider Storage
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestReplayLooping:
@@ -1189,11 +841,8 @@ class TestReplayLooping:
         assert collected[5].engine_rpm == collected[0].engine_rpm
         assert collected[10].engine_rpm == collected[0].engine_rpm
 
-    def test_looping_does_not_grow_memory_unbounded(self):
-        """
-        Proxy test: after N loop cycles, the number of objects tracked by the
-        provider equals the dataset size, not N × dataset_size.
-        """
+    def test_looping_keeps_provider_index_and_dataset_bounded(self):
+        """Reset reuses provider storage; this does not measure process memory."""
         rows = [_good_row() for _ in range(5)]
         provider = JSONLProvider(rows)
         adapter = MockAdapter(provider, loop=True)
@@ -1204,9 +853,10 @@ class TestReplayLooping:
 
         # Provider internal index should wrap, not accumulate
         assert provider._idx <= len(rows)
+        assert len(provider._data) == len(rows)
         adapter.disconnect()
 
-    def test_jsonl_provider_loads_10000_rows_without_memory_error(self, tmp_path):
+    def test_jsonl_provider_loads_10000_rows(self, tmp_path):
         path = tmp_path / "large_replay.jsonl"
         rows = [
             json.dumps(_good_row(engine_rpm=float(index % 9500)))
@@ -1214,7 +864,7 @@ class TestReplayLooping:
         ]
         path.write_text("\n".join(rows), encoding="utf-8")
 
-        provider = ProdJSONLProvider(path)
+        provider = JSONLProvider(path)
 
         assert len(provider._data) == 10000
 
@@ -1322,23 +972,18 @@ class TestSpecTestVectors:
             adapter.fetch_frame()
         adapter.disconnect()
 
-    def test_additional_properties_rejected(self):
-        """
-        US-001 JSON Schema enforces additionalProperties: false.
-        Any undocumented key must be treated as invalid / stripped.
-        """
-        row = _good_row()
-        row["undocumented_key"] = "some_value"
-        # The normaliser must either strip or reject unknown fields.
-        # Here we verify it does NOT surface in the DataPacket.
+    def test_unknown_source_metadata_is_not_emitted(self):
+        """Replay projects source metadata out of its emitted schema payload."""
+        row = _good_row(undocumented_key="some_value")
         adapter = MockAdapter(JSONLProvider([row]))
         adapter.connect()
         frame = adapter.fetch_frame()
-        assert not hasattr(frame, "undocumented_key")
+        assert "undocumented_key" not in frame.to_dict()
+        assert "undocumented_key" not in frame.to_schema_dict()
         adapter.disconnect()
 
     def test_production_packet_raw_snapshot_is_immutable(self):
-        packet = ProdDataPacket(
+        packet = DataPacket(
             timestamp="2025-01-15T10:00:00.000+00:00",
             vin_hashed="a" * 64,
             protocol="J1979_MODE01",
@@ -1355,7 +1000,7 @@ class TestSpecTestVectors:
             packet._raw["engine_rpm"] = 99999.0
 
     def test_production_to_schema_dict_does_not_key_error(self):
-        packet = ProdDataPacket(
+        packet = DataPacket(
             timestamp="2025-01-15T10:00:00.000+00:00",
             vin_hashed="a" * 64,
             protocol="UNKNOWN_PROTOCOL",
@@ -1375,13 +1020,13 @@ class TestProductionCandidParser:
 
     @pytest.mark.parametrize("pid", ["0C", "0x0C", 12])
     def test_engine_rpm_pid_accepts_bare_hex_prefixed_hex_and_integer(self, pid):
-        parsed = ProdCandidParser().parse({"pid": pid, "data": "0C 80"})
+        parsed = CandidParser().parse({"pid": pid, "data": "0C 80"})
 
         assert parsed["engine_rpm"] == 800.0
 
     def test_invalid_pid_token_raises_value_error(self):
         with pytest.raises(ValueError):
-            ProdCandidParser().parse({"pid": "not-a-pid", "data": "0C 80"})
+            CandidParser().parse({"pid": "not-a-pid", "data": "0C 80"})
 
     @pytest.mark.parametrize(
         "pid,field_name",
@@ -1398,14 +1043,86 @@ class TestProductionCandidParser:
         raw_byte,
     ):
         row = _good_row(pid=pid, data=raw_byte)
-        provider = ProdJSONLProvider([row], parser=ProdCandidParser())
-        adapter = ProdMockAdapter(provider)
+        provider = JSONLProvider([row], parser=CandidParser())
+        adapter = MockAdapter(provider)
         adapter.connect()
 
-        with pytest.raises(JsonSchemaValidationError) as exc_info:
+        with pytest.raises(ValidationError) as exc_info:
             adapter.fetch_frame()
 
         message = str(exc_info.value)
         assert field_name in message
         assert "out of bounds" in message
         adapter.disconnect()
+
+
+class TestProviderInputs:
+    @pytest.mark.parametrize("provider_type", [JSONLProvider, CSVProvider])
+    def test_empty_provider_stops_even_when_looping(self, provider_type):
+        adapter = MockAdapter(provider_type([]), loop=True)
+        adapter.connect()
+        try:
+            with pytest.raises(StopIteration):
+                adapter.fetch_frame()
+        finally:
+            adapter.disconnect()
+
+    @pytest.mark.parametrize("provider_type", [JSONLProvider, CSVProvider])
+    def test_reset_replays_input_without_mutating_source(self, provider_type):
+        row = _good_row()
+        provider = provider_type([row])
+        first = provider.get_next_row()
+        first["engine_rpm"] = 99999.0
+        with pytest.raises(StopIteration):
+            provider.get_next_row()
+        provider.reset()
+        assert provider.get_next_row() == row
+        assert row["engine_rpm"] == 800.0
+
+    @pytest.mark.parametrize("content", ['{"engine_rpm":', '[]', 'null'])
+    def test_malformed_jsonl_names_source_line(self, tmp_path, content):
+        path = tmp_path / "malformed.jsonl"
+        path.write_text("\n" + content + "\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="Malformed JSONL row 2"):
+            JSONLProvider(path)
+
+    @pytest.mark.parametrize("provider_type,suffix", [(JSONLProvider, "jsonl"), (CSVProvider, "csv")])
+    def test_file_provider_emits_normalized_frame(self, tmp_path, provider_type, suffix):
+        row = _good_row(engine_rpm=1200.0, vehicle_speed=60)
+        path = tmp_path / f"replay.{suffix}"
+        if suffix == "jsonl":
+            path.write_text("\n" + json.dumps(row) + "\n\n", encoding="utf-8")
+        else:
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(row))
+                writer.writeheader()
+                writer.writerow(row)
+        adapter = MockAdapter(provider_type(path))
+        adapter.connect()
+        try:
+            assert adapter.fetch_frame().to_dict() == row
+            with pytest.raises(StopIteration):
+                adapter.fetch_frame()
+        finally:
+            adapter.disconnect()
+
+    def test_malformed_csv_numeric_value_is_rejected(self, tmp_path):
+        path = tmp_path / "malformed.csv"
+        path.write_text("engine_rpm\ninvalid\n", encoding="utf-8")
+        with pytest.raises(ValueError):
+            CSVProvider(path).get_next_row()
+
+
+def test_compatibility_exports_are_production_subjects():
+    from autopulse import adapters, noise, providers, replayer
+    from tests import simulation
+
+    for module, names in (
+        (adapters, ["MockAdapter", "DataPacket"]),
+        (noise, ["NoiseGenerator"]),
+        (providers, ["CSVProvider", "JSONLProvider", "CandidParser"]),
+        (replayer, ["LogReplayer"]),
+        (simulation, ["MockAdapter", "LogReplayer", "NoiseGenerator", "CSVProvider", "JSONLProvider"]),
+    ):
+        for name in names:
+            assert getattr(module, name) is getattr(replay_module, name)
