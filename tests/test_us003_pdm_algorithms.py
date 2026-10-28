@@ -931,6 +931,10 @@ class TestAlgorithmicExecutionSequence:
             vin_hashed=frame.get("vin_hashed", _BASE_VIN),
             vehicle_class=vehicle_class
         )
+        # Branch arbitration needs an observed interval; first frames now seed
+        # a session with zero HDF/OSF contributions (#119).
+        seed = dict(frame, timestamp=processor._parse_timestamp(frame["timestamp"]) - 1000)
+        processor.process_frame(seed)
         return processor.process_frame(frame)
 
     def test_healthy_frame_produces_none_alert(self):

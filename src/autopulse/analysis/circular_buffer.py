@@ -7,7 +7,7 @@ import statistics
 @dataclass
 class CircularBuffer:
     """
-    Fixed-size ring buffer for the 60-second rolling window.
+    Fixed-size sample-count ring buffer (60 samples by default in PdMProcessor).
     O(1) push; wraps automatically.
     """
     capacity: int

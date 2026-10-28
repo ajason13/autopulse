@@ -77,6 +77,11 @@ observations; preserve this dated baseline, not tests that freeze these defects.
 
 ## Common score and time semantics
 
+The #119 temporal/reset portion is implemented as documented in the
+[processor time contract](processor-time-contract.md). OSF exposure and HDF
+eligibility remain owned by #120/#121; this decision's dated observations above
+retain their original baseline.
+
 1. A score lies in `[0, 1]`; zero means no contribution from that branch, including
    when it is ineligible. Zero is **not** evidence of a healthy engine. One is
    the top of an experimental scale, not certain failure. An ineligible branch

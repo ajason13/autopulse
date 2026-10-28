@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from copy import deepcopy
+from datetime import datetime, timezone
+import math
 import re
 import statistics
-import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -42,6 +43,11 @@ _PID_BY_SUMMARY_KEY = {
 _RPM_LOAD_ALPHA = 0.3
 _COOLANT_ALPHA = 0.1
 _MEDIAN_WINDOW = 3
+_SESSION_GAP_SECONDS = 60.0
+_BUFFER_NAMES = (
+    "rpm_buffer", "coolant_buffer", "load_buffer",
+    "_rpm_median_buffer", "_coolant_median_buffer", "_load_median_buffer",
+)
 
 
 @dataclass
@@ -78,26 +84,31 @@ class PdMProcessor:
         self.vehicle_class = vehicle_class
         self.window_size = window_size
 
-        # State
-        self.rpm_buffer = CircularBuffer(window_size)
-        self.coolant_buffer = CircularBuffer(window_size)
-        self.load_buffer = CircularBuffer(window_size)
-        self._rpm_median_buffer = CircularBuffer(window_size)
-        self._coolant_median_buffer = CircularBuffer(window_size)
-        self._load_median_buffer = CircularBuffer(window_size)
+        self.reset()
 
+    def reset(self) -> None:
+        """Start a new offline session, retaining identity and configuration."""
+        for name in _BUFFER_NAMES:
+            setattr(self, name, CircularBuffer(self.window_size))
         self.hdf_detector = HDFDetector()
-        self.osf_detector = OSFDetector(vehicle_class)
-
+        self.osf_detector = OSFDetector(self.vehicle_class)
         self.last_timestamp: float | None = None
         self.last_coolant_temp: float | None = None
 
     def process_frame(self, frame: dict[str, Any]) -> PdMAlert:
         """
-        Execute the 5-step processing sequence for a single OBD frame.
+        Process one offline frame; invalid/non-increasing time raises ValueError.
+
+        First frames and gaps >60 seconds seed a session with zero HDF/OSF
+        contributions. Sensor errors leave accepted state unchanged. See
+        docs/specs/processor-time-contract.md for representations/reset semantics.
         """
         timestamp_ms = self._parse_timestamp(frame.get("timestamp"))
         curr_time = timestamp_ms / 1000.0
+        if self.last_timestamp is not None and curr_time <= self.last_timestamp:
+            raise ValueError("timestamp must increase within a session; reset before replay.")
+        elapsed = 0.0 if self.last_timestamp is None else curr_time - self.last_timestamp
+        new_session = self.last_timestamp is None or elapsed > _SESSION_GAP_SECONDS
 
         # Step 1: Validate mandatory PIDs
         missing_pid = self._check_mandatory_pids(frame)
@@ -112,20 +123,28 @@ class PdMProcessor:
                 obd_frame=frame
             )
 
-        # Extract values
-        rpm = float(frame["engine_rpm"])
-        load = float(frame["engine_load"])
-        coolant = float(frame["coolant_temp"])
-        ambient = frame.get("ambient_temp")
-        delta_t = coolant - float(ambient) if ambient is not None else None
-
-        # Temporal delta
-        elapsed = 1.0  # Default to 1Hz
-        if self.last_timestamp is not None:
-            elapsed = max(0.001, curr_time - self.last_timestamp)
+        # Validate numeric inputs before any session or buffer mutation.
+        try:
+            rpm = float(frame["engine_rpm"])
+            load = float(frame["engine_load"])
+            coolant = float(frame["coolant_temp"])
+            ambient = frame.get("ambient_temp")
+            ambient = float(ambient) if ambient is not None else None
+            values = (rpm, load, coolant) + (() if ambient is None else (ambient,))
+            if not all(math.isfinite(value) for value in values):
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            return PdMAlert(
+                timestamp=timestamp_ms,
+                vin_hashed=self.vin_hashed,
+                failure_probability=0.0,
+                failure_type="SENSOR_ERROR",
+                is_anomaly=False,
+                obd_frame=frame,
+            )
 
         # Rate guard
-        if self.last_coolant_temp is not None:
+        if not new_session and self.last_coolant_temp is not None:
             try:
                 if self.hdf_detector.detect_thermal_rate_anomaly(
                     self.last_coolant_temp, coolant, elapsed
@@ -151,6 +170,14 @@ class PdMProcessor:
                 )
 
         # Step 2: Update temporal state only after sensor guards pass.
+        # Stage buffers so an internal smoothing rejection is atomic too.
+        previous_state = self.__dict__.copy()
+        if new_session and self.last_timestamp is not None:
+            self.reset()
+            elapsed = 0.0
+        else:
+            for name in _BUFFER_NAMES:
+                setattr(self, name, deepcopy(getattr(self, name)))
         self.rpm_buffer.push(rpm)
         self.coolant_buffer.push(coolant)
         self.load_buffer.push(load)
@@ -159,6 +186,7 @@ class PdMProcessor:
                 self._smooth_current_values()
             )
         except (RuntimeError, ValueError, TypeError, OverflowError):
+            self.__dict__.update(previous_state)
             return PdMAlert(
                 timestamp=timestamp_ms,
                 vin_hashed=self.vin_hashed,
@@ -177,14 +205,14 @@ class PdMProcessor:
         )
         p_hdf = (
             self.hdf_detector.compute_probability(smoothed_delta_t, smoothed_rpm)
-            if smoothed_delta_t is not None
+            if not new_session and smoothed_delta_t is not None
             else 0.0
         )
         stress_inc = self.osf_detector.compute_stress_increment(
             smoothed_load, smoothed_rpm, elapsed
         )
         self.osf_detector.update_stress_index(stress_inc)
-        p_osf = self.osf_detector.compute_probability()
+        p_osf = self.osf_detector.compute_probability() if not new_session else 0.0
 
         # Determine failure types
         hdf_type: FailureType = "HDF" if p_hdf > PROB_ANOMALY_LO else "NONE"
@@ -228,17 +256,27 @@ class PdMProcessor:
         return None
 
     def _parse_timestamp(self, ts: Any) -> int:
-        """Parse ISO timestamp or use current time in ms."""
-        if not ts:
-            return int(time.time() * 1000)
+        """Parse ISO time (naive means UTC) or numeric Unix milliseconds.
+
+        Reject unusable times with ValueError; never consult the host clock.
+        Resolution is milliseconds; finer fractions are truncated.
+        """
         try:
-            # Basic ISO parse if string
             if isinstance(ts, str):
                 parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                return int(parsed.timestamp() * 1000)
-            return int(ts)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                delta = parsed.astimezone(timezone.utc) - datetime(1970, 1, 1, tzinfo=timezone.utc)
+                timestamp_ms = (delta.days * 86400 + delta.seconds) * 1000 + delta.microseconds // 1000
+            elif isinstance(ts, (int, float)) and not isinstance(ts, bool):
+                timestamp_ms = int(ts)
+            else:
+                raise ValueError
+            if not -62135596800000 <= timestamp_ms <= 253402300799999:
+                raise ValueError
+            return timestamp_ms
         except (TypeError, ValueError, OverflowError):
-            return int(time.time() * 1000)
+            raise ValueError("timestamp must be ISO time or finite Unix milliseconds.") from None
 
     def _generate_summary(self) -> WindowSummary:
         """Generate min/max/avg/z-score/iqr summary for the rolling window."""

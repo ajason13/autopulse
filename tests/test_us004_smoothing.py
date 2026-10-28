@@ -741,6 +741,7 @@ class TestAuditRemediationRegressions:
     def test_t_g2_statistical_anomaly_does_not_override_primary_anomaly(self, monkeypatch):
         """Finding B: STATISTICAL_ANOMALY must not mask an active HDF/OSF alert."""
         processor = PdMProcessor("a" * 64)
+        processor.process_frame(_processor_frame(timestamp="2025-07-04T14:22:04.123Z"))
         monkeypatch.setattr(
             processor,
             "_smooth_current_values",
@@ -774,6 +775,7 @@ class TestAuditRemediationRegressions:
     ):
         """Finding B: STATISTICAL_ANOMALY may fire only at or below anomaly floor."""
         processor = PdMProcessor("a" * 64)
+        processor.process_frame(_processor_frame(timestamp="2025-07-04T14:22:04.123Z"))
         monkeypatch.setattr(
             processor,
             "_smooth_current_values",
@@ -820,8 +822,11 @@ class TestAuditRemediationRegressions:
             "_smooth_current_values",
             lambda: capturing_smooth(processor),
         )
-        for _ in range(60):
-            processor.process_frame(_processor_frame(engine_rpm=target_rpm))
+        for i in range(60):
+            processor.process_frame(_processor_frame(
+                timestamp=1_750_000_000_000 + i * 1000,
+                engine_rpm=target_rpm,
+            ))
         tolerance = target_rpm * 0.01
         assert abs(captured[-1] - target_rpm) <= tolerance
 
@@ -897,9 +902,10 @@ def test_processor_routes_smoothed_values_to_detectors_and_raw_values_to_statist
 
     expected_rpm = reference_smooth(raw, 0.3) if field == "engine_rpm" else [1500.0] * len(raw)
     expected_load = reference_smooth(raw, 0.3) if field == "engine_load" else [20.0] * len(raw)
-    assert len(hdf_inputs) == len(osf_inputs) == len(raw)
+    assert len(hdf_inputs) == len(raw) - 1  # first sample only seeds time
+    assert len(osf_inputs) == len(raw)
     for hdf_input, osf_input, rpm, load in zip(
-        hdf_inputs, osf_inputs, expected_rpm, expected_load,
+        hdf_inputs, osf_inputs[1:], expected_rpm[1:], expected_load[1:],
     ):
         assert hdf_input == pytest.approx((65.0, rpm))
         assert osf_input == pytest.approx((load, rpm, 1.0))
