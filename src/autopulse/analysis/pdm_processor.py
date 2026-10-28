@@ -52,7 +52,7 @@ _BUFFER_NAMES = (
 
 @dataclass
 class PdMAlert:
-    """Output schema as defined in US-003 §Output Specification."""
+    """Legacy alert API; failure_probability is an experimental score, not risk."""
     timestamp: int
     vin_hashed: str
     failure_probability: float
@@ -199,7 +199,7 @@ class PdMProcessor:
         stat_anomaly, stat_pid = self._evaluate_statistical_anomaly(summary)
 
         # Step 3 & 4: Evaluate branches.
-        # OSF includes the current frame's stress increment.
+        # OSF holds the previous sample over the observed interval.
         smoothed_delta_t = (
             smoothed_coolant - float(ambient) if ambient is not None else None
         )
@@ -208,11 +208,12 @@ class PdMProcessor:
             if not new_session and smoothed_delta_t is not None
             else 0.0
         )
-        stress_inc = self.osf_detector.compute_stress_increment(
-            smoothed_load, smoothed_rpm, elapsed
-        )
-        self.osf_detector.update_stress_index(stress_inc)
-        p_osf = self.osf_detector.compute_probability() if not new_session else 0.0
+        if rpm == 0:
+            # Raw engine-off bypasses lagging smoothing for this branch only.
+            self.osf_detector.reset()
+        else:
+            self.osf_detector.update(smoothed_load, smoothed_rpm, elapsed)
+        p_osf = self.osf_detector.compute_probability()
 
         # Determine failure types
         hdf_type: FailureType = "HDF" if p_hdf > PROB_ANOMALY_LO else "NONE"

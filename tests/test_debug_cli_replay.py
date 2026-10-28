@@ -227,31 +227,23 @@ def test_preview_alerts_skips_temporal_rejection_and_continues(tmp_path, capsys,
 
 def test_preview_alerts_schema_invalid_frame_does_not_stop_vin_session(tmp_path, capsys):
     vin = "d" * 64
-    rows = [
-        ice_row(
-            vin_hashed=vin,
-            timestamp="2026-05-26T10:00:00.000Z",
-            engine_rpm=1200.0,
-            engine_load=5.0,
-        ),
-        ice_row(vin_hashed=vin, engine_rpm=99999.0),
-        ice_row(
-            vin_hashed=vin,
-            timestamp="2026-05-26T10:01:00.000Z",
-            engine_rpm=900.0,
-            engine_load=5.0,
-            coolant_temp=30.0,
-            ambient_temp=25.0,
-        ),
-    ]
+    # One minute of held exposure produces an OSF alert. A rejected row must
+    # neither clear that exposure nor become a new session's first sample.
+    first = ice_row(vin_hashed=vin, engine_rpm=1000.0, engine_load=90.0)
+    last = dict(first, timestamp="2026-05-26T10:01:00.000Z")
+    rows = [first, dict(first, engine_rpm=99999.0), last]
     path = write_jsonl(tmp_path, rows)
 
-    exit_code = debug_main(["preview-alerts", "--jsonl", str(path)])
-
+    assert debug_main(["preview-alerts", "--jsonl", str(path)]) == 0
     alerts, _captured = parsed_stdout(capsys)
-    assert exit_code == 0
-    assert alerts[-1]["vin_hashed"] == vin
-    assert alerts[-1]["failure_probability"] > 0.0
+    clean = write_jsonl(tmp_path, [first, last], filename="clean.jsonl")
+    assert debug_main(["preview-alerts", "--jsonl", str(clean)]) == 0
+    expected, _ = parsed_stdout(capsys)
+    assert alerts == expected
+    assert len(alerts) == 1
+    assert alerts[0]["vin_hashed"] == vin
+    assert alerts[0]["failure_type"] == "OSF"
+    assert alerts[0]["failure_probability"] == 1.0
 
 
 def test_preview_alerts_raw_vin_in_vin_hashed_is_rejected_cleanly(tmp_path, capsys):

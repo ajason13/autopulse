@@ -65,7 +65,7 @@ def test_non_increasing_time_and_submillisecond_duplicate_are_atomic(seconds):
         processor.process_frame(frame(seconds, coolant_temp=40))
     assert state(processor) == before
     processor.process_frame(frame(1))
-    assert processor.osf_detector.s_idx == pytest.approx(850 * 18)
+    assert processor.osf_detector.s_idx == 0
 
 
 @pytest.mark.parametrize("timestamp,expected", [
@@ -122,7 +122,7 @@ def test_gap_boundary_and_no_stale_temperature_or_stress(gap):
     alert = processor.process_frame(next_frame)
     if gap == 60:
         assert len(processor.coolant_buffer) == 3
-        assert processor.osf_detector.s_idx == pytest.approx(850 * 18 * 61)
+        assert processor.osf_detector.s_idx == 0
     else:
         fresh = PdMProcessor("a" * 64)
         assert alert == fresh.process_frame(next_frame)
@@ -176,14 +176,14 @@ def test_thermal_rejection_uses_last_accepted_timestamp_and_rate_boundary():
     # 10 degrees over two seconds is exactly the existing guard boundary.
     assert processor.process_frame(frame(2, coolant_temp=98)).failure_type != "SENSOR_ERROR"
     assert processor.last_timestamp == (_BASE + timedelta(seconds=2)).timestamp()
-    assert processor.osf_detector.s_idx == pytest.approx(850 * 18 * 2)
+    assert processor.osf_detector.s_idx == 0
 
 
 def test_reset_and_repeated_replay_match_fresh_processor(monkeypatch):
     def forbidden_clock():
         raise AssertionError("offline processing consulted wall time")
     monkeypatch.setattr(time, "time", forbidden_clock)
-    frames = [frame(t) for t in (0, 1, 2, 30, 90, 151, 152)]
+    frames = [frame(t, engine_rpm=1000, engine_load=90) for t in (0, 1, 2, 30, 90, 151, 152)]
     for item in frames:
         validate_frame(item)
     processor = PdMProcessor("a" * 64, vehicle_class="H", window_size=7)
