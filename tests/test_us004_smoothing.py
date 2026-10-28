@@ -1,7 +1,7 @@
 """
 tests/test_us004_smoothing.py
 AutoPulse — US-004 Adversarial Test Suite
-Lead Auditor Sign-off: Engine Data Contract (US-001) × Windowed Analysis (US-004)
+Production coverage: Engine Data Contract (US-001) × Windowed Analysis (US-004)
 
 Spec under test:
   - Hybrid Median(3) → EWMA smoothing for RPM, Engine Load, and Coolant Temp.
@@ -37,10 +37,10 @@ from autopulse.analysis.pdm_processor import PdMProcessor
 from autopulse.analysis.utils import PROB_ANOMALY_HI, PROB_ANOMALY_LO
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Reference implementations
-# These stand in for the production CircularBuffer / PdMProcessor classes.
-# The tests are implementation-agnostic; swap these callables for the real
-# imports once the production code exists.
+# Independent reference math and production drivers.
+# Smoothing scenarios bypass process_frame guards/detector arbitration so thermal
+# rate rejection and saturated OSF scores cannot hide filter behavior. Separate
+# integration tests below exercise process_frame with real smoothing/statistics.
 # ──────────────────────────────────────────────────────────────────────────────
 
 def median_filter(window: list[float]) -> float:
@@ -59,39 +59,72 @@ def ewma_series(values: list[float], alpha: float) -> list[float]:
     return result
 
 
-def hybrid_smooth(raw_stream: list[float], alpha: float) -> list[float]:
+def reference_smooth(raw_stream: list[float], alpha: float) -> list[float]:
     """
-    Production pipeline:  raw → Median(3) → EWMA(alpha).
-    Returns one smoothed value per input sample.
+    Independent oracle: median of raw tails, EWMA over the last 60 medians.
+    The production buffer recomputes EWMA from its oldest retained median.
     """
     smoothed = []
     for i, _ in enumerate(raw_stream):
         window = raw_stream[max(0, i - 2): i + 1]   # up to 3 samples
         med = median_filter(window)
         smoothed.append(med)
-    return ewma_series(smoothed, alpha)
+    return [ewma_series(smoothed[max(0, i - 59):i + 1], alpha)[-1]
+            for i in range(len(smoothed))]
+
+
+def production_smooth(raw_stream: list[float], alpha: float) -> list[float]:
+    """Drive the real smoothing seam and check every sample against the oracle.
+
+    Feed all three channels to cover the distinct RPM/load and coolant alphas.
+    Default capacity 60 deliberately exercises median-buffer rollover.
+    """
+    processor = PdMProcessor("a" * 64)
+    outputs = []
+    expected_rpm = reference_smooth(raw_stream, 0.3)
+    expected_coolant = reference_smooth(raw_stream, 0.1)
+    for i, value in enumerate(raw_stream):
+        for buffer in (processor.rpm_buffer, processor.coolant_buffer, processor.load_buffer):
+            buffer.push(value)
+        rpm, coolant, load = processor._smooth_current_values()
+        assert (rpm, coolant, load) == pytest.approx(
+            (expected_rpm[i], expected_coolant[i], expected_rpm[i])
+        )
+        outputs.append(coolant if alpha == TEMP_ALPHA else rpm)
+    return outputs
 
 
 def z_score_anomaly(raw_stream: list[float], threshold: float = 3.0) -> list[bool]:
-    """Flag samples whose Z-score exceeds threshold. Operates on RAW values."""
-    if len(raw_stream) < 2:
-        return [False] * len(raw_stream)
-    mu = statistics.mean(raw_stream)
-    sigma = statistics.stdev(raw_stream)
-    if sigma == 0:
-        return [False] * len(raw_stream)
-    return [abs(v - mu) / sigma > threshold for v in raw_stream]
+    """Observe the production rolling raw summary, independently check its Z-score."""
+    processor = PdMProcessor("a" * 64)
+    flags = []
+    for i, value in enumerate(raw_stream):
+        processor.rpm_buffer.push(value)
+        summary = processor._generate_summary()["engine_rpm"]
+        window = raw_stream[max(0, i - 59):i + 1]
+        sigma = statistics.stdev(window) if len(window) > 1 else 0.0
+        expected = (value - statistics.mean(window)) / sigma if sigma else 0.0
+        assert summary["z_score"] == pytest.approx(expected)
+        flags.append(abs(summary["z_score"]) > threshold)
+    return flags
 
 
-def iqr_anomaly(raw_stream: list[float], k: float = 1.5) -> list[bool]:
-    """Flag samples outside [Q1 - k·IQR, Q3 + k·IQR]. Operates on RAW values."""
-    sorted_vals = sorted(raw_stream)
-    n = len(sorted_vals)
-    q1 = sorted_vals[n // 4]
-    q3 = sorted_vals[(3 * n) // 4]
-    iqr = q3 - q1
-    lo, hi = q1 - k * iqr, q3 + k * iqr
-    return [v < lo or v > hi for v in raw_stream]
+def iqr_anomaly(raw_stream: list[float]) -> list[bool]:
+    """Observe production IQR flags; compare with independent inclusive quartiles."""
+    processor = PdMProcessor("a" * 64)
+    flags = []
+    for i, value in enumerate(raw_stream):
+        processor.rpm_buffer.push(value)
+        summary = processor._generate_summary()["engine_rpm"]
+        window = raw_stream[max(0, i - 59):i + 1]
+        if len(window) > 1:
+            q1, _, q3 = statistics.quantiles(window, n=4, method="inclusive")
+        else:
+            q1 = q3 = value
+        expected = value < q1 - 1.5 * (q3 - q1) or value > q3 + 1.5 * (q3 - q1)
+        assert summary["is_statistical_outlier"] == expected
+        flags.append(summary["is_statistical_outlier"])
+    return flags
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -135,8 +168,8 @@ def inject_spike(stream: list[float], index: int, spike_value: float) -> list[fl
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Category A — Gaussian Noise Stability
-# Verifies that continuous, realistic sensor noise does NOT generate false PdM
-# failure alerts after the Median→EWMA pipeline.
+# Checks synthetic noise attenuation against test-defined signal bands.
+# These bands do not establish calibrated failure-alert behavior.
 # ──────────────────────────────────────────────────────────────────────────────
 
 class TestGaussianNoiseStability:
@@ -150,14 +183,14 @@ class TestGaussianNoiseStability:
     def test_rpm_gaussian_noise_does_not_cross_alert_band(self):
         """
         Scenario: Engine idling at ~800 RPM with ±120 RPM sensor flicker (2-σ).
-        Smoothed output must stay within a ±60 RPM band around the true idle.
+        Smoothed output must stay within a ±120 RPM band around the true idle.
         This validates α = 0.3 provides adequate damping for RPM.
         """
         center, noise_std = 800.0, 60.0
         alert_band = 120.0  # half-width; alert fires if |smoothed - center| > this
 
         raw = gaussian_stream(center, noise_std, length=120)
-        smoothed = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw, alpha=RPM_ALPHA)
 
         violations = [
             (i, v) for i, v in enumerate(smoothed)
@@ -178,7 +211,7 @@ class TestGaussianNoiseStability:
         overtemp_threshold = 120.0
 
         raw = gaussian_stream(center, noise_std, length=120)
-        smoothed = hybrid_smooth(raw, alpha=TEMP_ALPHA)
+        smoothed = production_smooth(raw, alpha=TEMP_ALPHA)
 
         violations = [v for v in smoothed if v >= overtemp_threshold]
         assert not violations, (
@@ -193,7 +226,7 @@ class TestGaussianNoiseStability:
         signal (at least 50% reduction), confirming the filter is operative.
         """
         raw = gaussian_stream(1500.0, 150.0, length=200)
-        smoothed = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw, alpha=RPM_ALPHA)
 
         raw_var      = statistics.variance(raw)
         smoothed_var = statistics.variance(smoothed)
@@ -210,8 +243,8 @@ class TestGaussianNoiseStability:
         Same input stream → compare variance of outputs.
         """
         raw = gaussian_stream(90.0, 10.0, length=200)
-        smoothed_low_alpha  = hybrid_smooth(raw, alpha=TEMP_ALPHA)   # α=0.1
-        smoothed_high_alpha = hybrid_smooth(raw, alpha=RPM_ALPHA)    # α=0.3
+        smoothed_low_alpha  = production_smooth(raw, alpha=TEMP_ALPHA)   # α=0.1
+        smoothed_high_alpha = production_smooth(raw, alpha=RPM_ALPHA)    # α=0.3
 
         var_low  = statistics.variance(smoothed_low_alpha)
         var_high = statistics.variance(smoothed_high_alpha)
@@ -230,7 +263,7 @@ class TestGaussianNoiseStability:
         lo_bound, hi_bound = 50.0, 80.0
 
         raw = gaussian_stream(center, noise_std, length=120, lo=LOAD_MIN, hi=LOAD_MAX)
-        smoothed = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw, alpha=RPM_ALPHA)
 
         # Allow 1-sample transient at start (EWMA settling)
         violations = [
@@ -269,7 +302,7 @@ class TestSingleFrameSpikeCapture:
         spike_value = 9000.0
 
         raw_with_spike = inject_spike(base, spike_index, spike_value)
-        smoothed = hybrid_smooth(raw_with_spike, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw_with_spike, alpha=RPM_ALPHA)
 
         # Raw anomaly detector fires
         raw_flags = z_score_anomaly(raw_with_spike, threshold=3.0)
@@ -287,7 +320,7 @@ class TestSingleFrameSpikeCapture:
 
     def test_coolant_single_spike_detected_by_z_score_on_raw(self):
         """
-        Inject one sample at 135°C (beyond pressurized boiling point) into a
+        Inject one synthetic sample at 135°C into a
         stable 90°C stream.  Raw detector fires; smoothed does not.
         This validates the 'Thermal Anomaly Test' from US-001 §Test Vectors.
         """
@@ -296,7 +329,7 @@ class TestSingleFrameSpikeCapture:
         spike_value = 135.0
 
         raw_with_spike = inject_spike(base, spike_index, spike_value)
-        smoothed = hybrid_smooth(raw_with_spike, alpha=TEMP_ALPHA)
+        smoothed = production_smooth(raw_with_spike, alpha=TEMP_ALPHA)
 
         raw_flags = z_score_anomaly(raw_with_spike, threshold=3.0)
         assert raw_flags[spike_index], (
@@ -321,7 +354,7 @@ class TestSingleFrameSpikeCapture:
         spike_value = 8500.0
 
         raw_with_spike = inject_spike(base, spike_index, spike_value)
-        flags = iqr_anomaly(raw_with_spike, k=1.5)
+        flags = iqr_anomaly(raw_with_spike)
 
         assert flags[spike_index], (
             f"IQR detector on RAW stream missed spike of {spike_value} RPM."
@@ -345,7 +378,7 @@ class TestSingleFrameSpikeCapture:
             "Z-score must flag both frames of a 2-frame spike."
         )
 
-        smoothed = hybrid_smooth(raw_with_spike, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw_with_spike, alpha=RPM_ALPHA)
         # Frame 31: median window = [spike, spike, normal] → median = spike.
         # EWMA attenuates but value should still be significantly elevated.
         assert smoothed[31] > 2000.0, (
@@ -409,7 +442,7 @@ class TestBoundaryArithmetic:
         EWMA output must remain ≤ 9,500 RPM at every step.
         """
         raw = [9500.0] * 100
-        smoothed = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw, alpha=RPM_ALPHA)
         violations = [v for v in smoothed if v > RPM_MAX]
         assert not violations, (
             f"Smoothed RPM exceeded schema max at {len(violations)} samples. "
@@ -422,7 +455,7 @@ class TestBoundaryArithmetic:
         US-001 §Zero-Value Robustness).  Output must be exactly 0.0.
         """
         raw = [0.0] * 50
-        smoothed = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw, alpha=RPM_ALPHA)
         assert all(v == 0.0 for v in smoothed), (
             f"Smoothed RPM drifted from 0.0: {[v for v in smoothed if v != 0.0]}"
         )
@@ -430,14 +463,14 @@ class TestBoundaryArithmetic:
     def test_coolant_smoothed_never_exceeds_schema_max(self):
         """Stream at 140°C ceiling; every smoothed value must stay ≤ 140°C."""
         raw = [140.0] * 100
-        smoothed = hybrid_smooth(raw, alpha=TEMP_ALPHA)
+        smoothed = production_smooth(raw, alpha=TEMP_ALPHA)
         violations = [v for v in smoothed if v > TEMP_MAX]
         assert not violations, f"Smoothed coolant exceeded 140°C: {violations}"
 
     def test_coolant_smoothed_never_drops_below_schema_min(self):
         """Stream at -40°C floor (arctic cold-start); output must stay ≥ -40°C."""
         raw = [-40.0] * 100
-        smoothed = hybrid_smooth(raw, alpha=TEMP_ALPHA)
+        smoothed = production_smooth(raw, alpha=TEMP_ALPHA)
         violations = [v for v in smoothed if v < TEMP_MIN]
         assert not violations, f"Smoothed coolant dropped below -40°C: {violations}"
 
@@ -449,7 +482,7 @@ class TestBoundaryArithmetic:
         """
         target = 3000.0
         raw = [target] * 60
-        smoothed = ewma_series(raw, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw, alpha=RPM_ALPHA)
 
         convergence_sample = math.ceil(math.log(0.01) / math.log(1 - RPM_ALPHA))
         post_convergence = smoothed[convergence_sample:]
@@ -467,7 +500,7 @@ class TestBoundaryArithmetic:
         Smoothing a zero stream must remain 0%.
         """
         raw = [0.0] * 30
-        smoothed = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw, alpha=RPM_ALPHA)
         assert all(v == 0.0 for v in smoothed), "Zero engine load incorrectly drifts after smoothing."
 
     def test_mixed_boundary_stream_does_not_corrupt_ewma_state(self):
@@ -476,7 +509,7 @@ class TestBoundaryArithmetic:
         accumulator state.  Every output must remain within [0, 9500].
         """
         raw = [0.0 if i % 2 == 0 else 9500.0 for i in range(60)]
-        smoothed = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        smoothed = production_smooth(raw, alpha=RPM_ALPHA)
 
         violations = [v for v in smoothed if not (RPM_MIN <= v <= RPM_MAX)]
         assert not violations, (
@@ -519,7 +552,7 @@ class TestPipelineOrdering:
         base = [1500.0] * 60
         raw = inject_spike(base, 30, 9000.0)
 
-        correct   = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        correct   = production_smooth(raw, alpha=RPM_ALPHA)
         incorrect = self._ewma_then_median(raw, alpha=RPM_ALPHA)
 
         peak_correct   = max(correct[28:34])
@@ -540,7 +573,7 @@ class TestPipelineOrdering:
         raw = inject_spike(base, 20, 9000.0)
         baseline = 1500.0
 
-        correct   = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        correct   = production_smooth(raw, alpha=RPM_ALPHA)
         incorrect = self._ewma_then_median(raw, alpha=RPM_ALPHA)
 
         recovery_window = 5
@@ -560,7 +593,7 @@ class TestPipelineOrdering:
         produce identical outputs.  Order only matters when outliers are present.
         """
         raw = [2000.0] * 100
-        correct   = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        correct   = production_smooth(raw, alpha=RPM_ALPHA)
         incorrect = self._ewma_then_median(raw, alpha=RPM_ALPHA)
 
         for i, (c, w) in enumerate(zip(correct[10:], incorrect[10:]), start=10):
@@ -594,7 +627,7 @@ class TestColdStartScenario:
         and must reach ≥ 80°C (normal operating temp) within the 600-sample window.
         """
         raw = self._linear_ramp_with_noise(0.0, 85.0, n=600, noise_std=2.0)
-        smoothed = hybrid_smooth(raw, alpha=TEMP_ALPHA)
+        smoothed = production_smooth(raw, alpha=TEMP_ALPHA)
 
         # Monotonicity: moving 60-sample average should always increase
         window_size = 60
@@ -623,7 +656,7 @@ class TestColdStartScenario:
         for idx in [100, 200, 350, 500]:
             raw = inject_spike(raw, idx, 108.0)
 
-        smoothed = hybrid_smooth(raw, alpha=TEMP_ALPHA)
+        smoothed = production_smooth(raw, alpha=TEMP_ALPHA)
         overtemp_threshold = 110.0
 
         violations = [v for v in smoothed if v >= overtemp_threshold]
@@ -650,7 +683,7 @@ class TestColdStartScenario:
             "Thermal anomaly (85→135°C in 1 s) not flagged by Z-score on raw stream."
         )
 
-        smoothed = hybrid_smooth(raw, alpha=TEMP_ALPHA)
+        smoothed = production_smooth(raw, alpha=TEMP_ALPHA)
         # With α=0.1, a single spike at 135 in a sea of 85s:
         # Median(3) sees [85, 135, 85] → 85.  EWMA barely moves.
         assert smoothed[spike_index] < 100.0, (
@@ -669,19 +702,19 @@ class TestDeterminismAndReproducibility:
     def test_identical_inputs_produce_identical_smoothed_outputs(self):
         """Two calls with the same stream must produce bit-identical results."""
         raw = gaussian_stream(1500.0, 100.0, length=100)
-        out1 = hybrid_smooth(raw, alpha=RPM_ALPHA)
-        out2 = hybrid_smooth(raw, alpha=RPM_ALPHA)
+        out1 = production_smooth(raw, alpha=RPM_ALPHA)
+        out2 = production_smooth(raw, alpha=RPM_ALPHA)
         assert out1 == out2, "Smoothing pipeline is non-deterministic."
 
     def test_single_element_stream_handled_without_error(self):
         """Edge case: 1-sample stream must return a list with 1 value."""
-        out = hybrid_smooth([1500.0], alpha=RPM_ALPHA)
+        out = production_smooth([1500.0], alpha=RPM_ALPHA)
         assert len(out) == 1
         assert out[0] == 1500.0
 
     def test_two_element_stream_handled_without_error(self):
         """Edge case: 2-sample stream (partial Median window)."""
-        out = hybrid_smooth([1500.0, 1600.0], alpha=RPM_ALPHA)
+        out = production_smooth([1500.0, 1600.0], alpha=RPM_ALPHA)
         assert len(out) == 2
         assert all(RPM_MIN <= v <= RPM_MAX for v in out)
 
@@ -823,3 +856,77 @@ def _processor_frame(**overrides) -> dict:
     }
     frame.update(overrides)
     return frame
+
+
+@pytest.mark.parametrize(
+    "field,baseline,spike,pid",
+    [("engine_rpm", 1500.0, 9000.0, 0x0C), ("engine_load", 20.0, 95.0, 0x04)],
+)
+def test_processor_routes_smoothed_values_to_detectors_and_raw_values_to_statistics(
+    monkeypatch, field, baseline, spike, pid,
+):
+    """Isolate arbitration, preserving real smoothing, summaries and stat gates.
+
+    OSF's current calibration saturates on ordinary frames (#118/#120). Stub
+    only detector probabilities, capturing their inputs; a raw spike must still
+    produce a statistical alert while both detector inputs remain smoothed.
+    """
+    processor = PdMProcessor("a" * 64)
+    hdf_inputs = []
+    osf_inputs = []
+
+    def capture_hdf(delta_t, rpm):
+        hdf_inputs.append((delta_t, rpm))
+        return 0.0
+
+    def capture_stress(load, rpm, elapsed):
+        osf_inputs.append((load, rpm, elapsed))
+        return 0.0
+
+    monkeypatch.setattr(processor.hdf_detector, "compute_probability", capture_hdf)
+    monkeypatch.setattr(processor.osf_detector, "compute_stress_increment", capture_stress)
+    monkeypatch.setattr(processor.osf_detector, "compute_probability", lambda: 0.0)
+
+    raw = [baseline] * 30 + [spike] + [baseline] * 4
+    alerts = []
+    for i, value in enumerate(raw):
+        alerts.append(processor.process_frame(_processor_frame(
+            timestamp=1_750_000_000_000 + i * 1000,
+            engine_rpm=1500.0, engine_load=20.0,
+        ) | {field: value}))
+
+    expected_rpm = reference_smooth(raw, 0.3) if field == "engine_rpm" else [1500.0] * len(raw)
+    expected_load = reference_smooth(raw, 0.3) if field == "engine_load" else [20.0] * len(raw)
+    assert len(hdf_inputs) == len(osf_inputs) == len(raw)
+    for hdf_input, osf_input, rpm, load in zip(
+        hdf_inputs, osf_inputs, expected_rpm, expected_load,
+    ):
+        assert hdf_input == pytest.approx((65.0, rpm))
+        assert osf_input == pytest.approx((load, rpm, 1.0))
+    assert all(alert.failure_type == "NONE" for alert in alerts[:30])
+    alert = alerts[30]
+    assert alert.failure_type == "STATISTICAL_ANOMALY"
+    assert alert.failure_probability == PROB_ANOMALY_HI
+    assert alert.is_anomaly is True
+    assert alert.primary_pid == pid
+    stats = alert.window_summary[field]
+    assert stats["max"] == spike
+    assert stats["avg"] == pytest.approx(statistics.mean(raw[:31]))
+    assert stats["z_score"] == pytest.approx(
+        (spike - statistics.mean(raw[:31])) / statistics.stdev(raw[:31])
+    )
+    assert stats["is_statistical_outlier"] is True
+    assert not any(alert.is_anomaly for alert in alerts[31:])
+
+
+def test_processor_rejects_thermal_jump_before_smoothing():
+    """The 85→135°C/second vector hits the real rate guard, not a filter oracle."""
+    processor = PdMProcessor("a" * 64)
+    processor.process_frame(_processor_frame(timestamp=1_750_000_000_000, coolant_temp=85.0))
+    alert = processor.process_frame(_processor_frame(
+        timestamp=1_750_000_001_000, coolant_temp=135.0,
+    ))
+    assert alert.failure_type == "SENSOR_ERROR"
+    assert alert.primary_pid == 0x05
+    assert processor.coolant_buffer.to_list() == [85.0]
+    assert processor._coolant_median_buffer.to_list() == [85.0]
