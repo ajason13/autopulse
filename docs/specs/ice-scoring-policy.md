@@ -1,7 +1,8 @@
 # ICE experimental scoring policy
 
 **Decision:** #118, 2026-10-28 UTC. Accepted for the offline implementation
-issues listed below; **not implemented by this PR**. Observation baseline:
+issues listed below. Temporal handling (#119) and OSF (#120) are implemented;
+HDF eligibility (#121) remains pending. Observation baseline:
 `e5957cd4f1bc1ea06f6d4552a3ceec13b016900d`.
 
 AutoPulse will treat ICE detector outputs as bounded experimental anomaly
@@ -13,8 +14,9 @@ physical damage threshold, warning lead time, or maintenance recommendation.
 
 ## Scope and evidence
 
-This record is authoritative for the #118 decision, not a description of current
-runtime behavior. Implementation belongs to [#119](https://github.com/ajason13/autopulse/issues/119)
+This record is authoritative for the #118 decision. The dated observations below
+preserve the original runtime baseline; implementation ownership belongs to
+[#119](https://github.com/ajason13/autopulse/issues/119)
 (temporal/session handling), [#120](https://github.com/ajason13/autopulse/issues/120)
 (OSF), and [#121](https://github.com/ajason13/autopulse/issues/121) (HDF eligibility).
 Do not change schemas, diagnostic services, EV scoring, or train a model here.
@@ -78,9 +80,10 @@ observations; preserve this dated baseline, not tests that freeze these defects.
 ## Common score and time semantics
 
 The #119 temporal/reset portion is implemented as documented in the
-[processor time contract](processor-time-contract.md). OSF exposure and HDF
-eligibility remain owned by #120/#121; this decision's dated observations above
-retain their original baseline.
+[processor time contract](processor-time-contract.md). OSF exposure is implemented
+in #120 as described below. HDF eligibility remains
+owned by #121; this decision's dated observations above retain their original
+baseline.
 
 1. A score lies in `[0, 1]`; zero means no contribution from that branch, including
    when it is ineligible. Zero is **not** evidence of a healthy engine. One is
@@ -160,6 +163,38 @@ Classify score `<= 0.5` as `NONE`, `0.5 < score < 1` as `OSF_ANOMALY`, and score
 `1` as `OSF`. This aligns branch labels with the processor's existing strict
 `> 0.5` anomaly gate. The old 0.8 × class-limit boundary is retired. Preserve
 other branch selection/tie behavior; #123 owns wider alert-contract changes.
+
+### OSF implementation and compatibility (#120)
+
+[`OSFDetector`](../../src/autopulse/analysis/osf_detector.py) now exposes
+`update(load_pct, rpm, elapsed_seconds)`: the first call seeds the indicator
+without accruing exposure, then each call integrates the previous indicator.
+Use elapsed seconds since the previous accepted sample. The processor supplies
+smoothed load/RPM, gates on raw RPM zero, and owns session-gap resets. Direct
+callers must reset at session boundaries themselves. Zero elapsed time adds no
+exposure; negative elapsed time or nonfinite inputs raise before mutation.
+Engine-off clears
+only OSF, including its held indicator; a restart first seeds fresh history.
+
+Intentional helper/state API changes: `s_idx` is now a read-only recent exposure
+**duration in seconds**, not cumulative workload. `compute_stress_increment()`,
+`update_stress_index()`, the class-specific `limit` attribute and `OSF_LIMITS`
+constant are removed: scalar increments cannot represent interval expiry and
+left-held transitions. Call `update()` instead; `OSF_WINDOW_SECONDS` is 60.
+`vehicle_class` still accepts L/M/H with identical scoring.
+`compute_probability(k=...)` retains its legacy name/argument, ignores `k`, and
+returns `s_idx / 60`. It is an experimental exposure fraction, not a sigmoid or
+calibrated probability. Alert `failure_probability` retains its API spelling
+with that same interpretation for the OSF branch.
+
+Only positive-exposure intervals are stored; adjacent intervals merge and
+expired intervals are removed, with partial clipping at the horizon. No lifetime
+ledger, persisted state or new telemetry logging is introduced. Existing alerts
+and inspectable detector state provide the result for supplied-data replay.
+[`test_osf_exposure_policy.py`](../../tests/test_osf_exposure_policy.py) validates
+O1–O5, T2 and the OSF portion of R1 using production classes and schema-validated
+processor fixtures. Cross-cadence equality applies to identical indicator
+trajectories; the existing smoothing/statistical windows remain sample based.
 
 ## HDF decision: an armed synthetic experiment
 
@@ -244,8 +279,9 @@ other repository design records; the Starlight site does not ingest this file.
 
 The owning implementations must run production-backed focused algorithm,
 processor and smoothing regressions, the full Python suite, required hosted
-checks, and fresh-context review. #119 runs next; #120 waits for both #118 and
-#119; #121 waits for #118. The complete replay/export demonstration remains
+checks, and fresh-context review. #119 and #120 are implemented; #121 is the
+next implementation in the offline track, with its #118 prerequisite complete.
+The complete replay/export demonstration remains
 [#126](https://github.com/ajason13/autopulse/issues/126). Broader public wording
 cleanup remains [#130](https://github.com/ajason13/autopulse/issues/130), and
 learned/calibrated vehicle-baseline research remains separately scoped in

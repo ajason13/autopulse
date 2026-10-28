@@ -14,9 +14,9 @@ Run with:
 
 All boundary values are derived directly from the US-003 specification:
   - HDF critical trigger:  ΔT < 8.6 K  AND  RPM < 1380
-  - OSF S_limit:           11 000 (L) | 12 000 (M) | 13 000 (H)
-  - OSF anomaly zone:      0.8 × S_limit ≤ S_idx < S_limit
-  - Lugging penalty:       RPM < 1500 AND load > 80 %
+  - OSF exposure:          previous 60 seconds, same policy for L/M/H
+  - OSF anomaly zone:      0.5 < exposure / 60 < 1
+  - Exposure indicator:    0 < RPM < 1500 AND load > 80 %
   - Sigmoid model:         P = 1 / (1 + e^(-k(x - x₀)))
   - Circular buffer:       60-element ring, O(1) push/pop
   - PdMAlert schema:       failure_probability ∈ [0.0, 1.0]
@@ -46,7 +46,7 @@ from autopulse.analysis.osf_detector import OSFDetector
 from autopulse.analysis.circular_buffer import CircularBuffer
 from autopulse.analysis.utils import (
     VehicleClass,
-    OSF_LIMITS,
+    OSF_WINDOW_SECONDS,
     HDF_DELTA_T_THRESHOLD_K,
     HDF_RPM_THRESHOLD,
     LUGGING_RPM_CEILING,
@@ -63,19 +63,15 @@ from autopulse.analysis.utils import (
 def compute_hdf_probability(delta_t: float, rpm: float, k: float = 0.8) -> float:
     return HDFDetector.compute_probability(delta_t, rpm, k_dt=k)
 
-def compute_osf_stress_index(load_pct: float, rpm: float, elapsed_seconds: float, lugging_k: float = 0.3) -> float:
-    detector = OSFDetector() # Temporary detector for stateless math test
-    return detector.compute_stress_increment(load_pct, rpm, elapsed_seconds, lugging_k)
-
-def classify_osf(s_idx: float, vehicle_class: VehicleClass) -> str:
+def exposed_detector(seconds: float, vehicle_class: VehicleClass = "L") -> OSFDetector:
     detector = OSFDetector(vehicle_class)
-    detector.s_idx = s_idx
-    return detector.classify()
+    detector.update(90, 1000, 0)
+    detector.update(90, 1000, seconds)
+    return detector
 
-def compute_osf_probability(s_idx: float, vehicle_class: VehicleClass, k: float = 0.001) -> float:
-    detector = OSFDetector(vehicle_class)
-    detector.s_idx = s_idx
-    return detector.compute_probability(k)
+
+def compute_osf_probability(seconds: float, vehicle_class: VehicleClass) -> float:
+    return exposed_detector(seconds, vehicle_class).compute_probability()
 
 def detect_thermal_rate_anomaly(prev_temp: float, curr_temp: float, elapsed_seconds: float) -> bool:
     return HDFDetector.detect_thermal_rate_anomaly(prev_temp, curr_temp, elapsed_seconds)
@@ -150,9 +146,9 @@ class TestSigmoidModel:
         p_high_k = sigmoid(x, x0=x0, k=2.0)
         assert p_high_k > p_low_k
 
-    def test_sigmoid_osf_at_class_l_limit_returns_exactly_0_5(self):
-        """OSF sigmoid anchored at anomaly lower bound: 0.8 × 11 000 = 8 800."""
-        anomaly_lo = 0.8 * OSF_LIMITS["L"]  # 8 800
+    def test_sigmoid_at_arbitrary_midpoint_returns_exactly_0_5(self):
+        """The generic sigmoid remains available for HDF; OSF no longer uses it."""
+        anomaly_lo = 8_800.0
         p = sigmoid(anomaly_lo, x0=anomaly_lo, k=0.001)
         assert abs(p - 0.5) < 1e-9
 
@@ -393,150 +389,17 @@ class TestHDFSensorErrorPath:
 # §6  OSF DETECTION — VEHICLE CLASS THRESHOLDS
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestOSFVehicleClassThresholds:
-    """
-    AI4I 2020 OSF thresholds mapped to AutoPulse vehicle classes.
-    Class L = 11 000, M = 12 000, H = 13 000.
-    US-003 §Thresholds for Anomaly vs. Critical Failure.
-    """
-
-    @pytest.mark.parametrize("vehicle_class,limit", [
-        ("L", 11_000.0),
-        ("M", 12_000.0),
-        ("H", 13_000.0),
+class TestOSFExposureThresholds:
+    @pytest.mark.parametrize("vehicle_class", ["L", "M", "H"])
+    @pytest.mark.parametrize("seconds,label", [
+        (0, "NONE"), (1, "NONE"), (30, "NONE"),
+        (31, "OSF_ANOMALY"), (60, "OSF"), (600, "OSF"),
     ])
-    def test_s_idx_at_limit_is_critical(self, vehicle_class, limit):
-        """S_idx == S_limit → CRITICAL, probability = 1.0."""
-        assert classify_osf(limit, vehicle_class) == "OSF"
-        assert compute_osf_probability(limit, vehicle_class) == PROB_CRITICAL
-
-    @pytest.mark.parametrize("vehicle_class,limit", [
-        ("L", 11_000.0),
-        ("M", 12_000.0),
-        ("H", 13_000.0),
-    ])
-    def test_s_idx_above_limit_is_critical(self, vehicle_class, limit):
-        """S_idx > S_limit → still CRITICAL; no overflow behaviour."""
-        assert classify_osf(limit + 1.0, vehicle_class) == "OSF"
-
-    @pytest.mark.parametrize("vehicle_class,anomaly_lo", [
-        ("L", 8_800.0),    # 0.8 × 11 000
-        ("M", 9_600.0),    # 0.8 × 12 000
-        ("H", 10_400.0),   # 0.8 × 13 000
-    ])
-    def test_s_idx_at_anomaly_lower_bound_is_osf_anomaly(self, vehicle_class, anomaly_lo):
-        """
-        S_idx = 0.8 × S_limit → enters anomaly zone.
-        Math check: 0.8 × 11 000 = 8 800 (verified inline).
-        """
-        assert classify_osf(anomaly_lo, vehicle_class) == "OSF_ANOMALY"
-
-    @pytest.mark.parametrize("vehicle_class,anomaly_lo", [
-        ("L", 8_800.0),
-        ("M", 9_600.0),
-        ("H", 10_400.0),
-    ])
-    def test_s_idx_just_below_anomaly_lower_bound_is_normal(self, vehicle_class, anomaly_lo):
-        """S_idx just below 0.8 × S_limit → NONE."""
-        assert classify_osf(anomaly_lo - 1.0, vehicle_class) == "NONE"
-
-    def test_anomaly_probability_in_correct_range(self):
-        """
-        In the anomaly zone, probability must satisfy 0.5 ≤ P < 1.0.
-        Uses Class L mid-point (S_idx = 9 900, between 8 800 and 11 000).
-        """
-        s_idx = 9_900.0
-        p = compute_osf_probability(s_idx, "L")
-        assert PROB_ANOMALY_LO <= p < PROB_CRITICAL
-
-    def test_normal_zone_probability_below_0_5(self):
-        """Below the anomaly lower bound, probability must be < 0.5."""
-        p = compute_osf_probability(5_000.0, "L")
-        assert p < PROB_ANOMALY_LO
-
-    def test_zero_s_idx_is_normal(self):
-        """Engine off or first frame: S_idx = 0 → NONE."""
-        assert classify_osf(0.0, "L") == "NONE"
-        assert compute_osf_probability(0.0, "L") < PROB_ANOMALY_LO
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# §7  OSF DETECTION — WORKLOAD FACTOR AND LUGGING PENALTY
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestOSFWorkloadFactor:
-    """
-    Wf = Load_PID04 × RPM_PID0C.
-    γ (lugging penalty) activates exponentially when RPM < 1500 AND load > 80 %.
-    US-003 §Defining the Workload Factor.
-    """
-
-    def test_workload_factor_is_product_of_load_and_rpm(self):
-        """
-        Math check: Load = 60 %, RPM = 2 000 → Wf = 120 000 (before γ).
-        S_idx over 1 second with γ = 1.0 must equal 120 000.
-        """
-        s_idx = compute_osf_stress_index(load_pct=60.0, rpm=2_000.0, elapsed_seconds=1.0)
-        assert abs(s_idx - 120_000.0) < 1.0
-
-    def test_lugging_condition_increases_stress_index(self):
-        """
-        RPM = 1 200, Load = 85 % → lugging active → γ > 1.0.
-        S_idx must be larger than the non-penalised equivalent.
-        """
-        s_penalised = compute_osf_stress_index(load_pct=85.0, rpm=1_200.0, elapsed_seconds=1.0)
-        s_normal = 85.0 * 1_200.0 * 1.0  # Wf with γ = 1.0
-        assert s_penalised > s_normal
-
-    def test_lugging_does_not_activate_at_rpm_exactly_1500(self):
-        """
-        RPM = 1 500 is NOT below 1 500 → lugging penalty must not activate.
-        γ = 1.0, so S_idx == Wf × elapsed.
-        """
-        s = compute_osf_stress_index(load_pct=90.0, rpm=1_500.0, elapsed_seconds=1.0)
-        expected = 90.0 * 1_500.0 * 1.0
-        assert abs(s - expected) < 1.0
-
-    def test_lugging_does_not_activate_at_load_exactly_80_pct(self):
-        """
-        Load = 80.0 % is NOT above 80 % → lugging penalty must not activate.
-        """
-        s = compute_osf_stress_index(load_pct=80.0, rpm=1_200.0, elapsed_seconds=1.0)
-        expected = 80.0 * 1_200.0 * 1.0
-        assert abs(s - expected) < 1.0
-
-    def test_high_rpm_high_load_no_lugging_penalty(self):
-        """
-        Normal high-performance driving: RPM = 4 000, Load = 90 % → γ = 1.0.
-        """
-        s = compute_osf_stress_index(load_pct=90.0, rpm=4_000.0, elapsed_seconds=1.0)
-        expected = 90.0 * 4_000.0 * 1.0
-        assert abs(s - expected) < 1.0
-
-    def test_zero_rpm_produces_zero_workload_factor(self):
-        """
-        Engine off: RPM = 0, Load = 0 → Wf = 0 → S_idx unchanged.
-        The cumulative stress counter must freeze when the engine is off.
-        """
-        s = compute_osf_stress_index(load_pct=0.0, rpm=0.0, elapsed_seconds=1.0)
-        assert s == 0.0
-
-    def test_negative_elapsed_seconds_raises_value_error(self):
-        """Negative time is physically nonsensical; must be rejected."""
-        with pytest.raises(ValueError):
-            compute_osf_stress_index(load_pct=50.0, rpm=2_000.0, elapsed_seconds=-1.0)
-
-    def test_s_idx_accumulates_correctly_over_60_frames(self):
-        """
-        US-003 §State Persistence: S_idx integrates over time.
-        60 frames at 1 Hz with Load=50 %, RPM=2 000, γ=1.0.
-        Expected total = 60 × (50 × 2 000) = 6 000 000.
-        """
-        total = sum(
-            compute_osf_stress_index(load_pct=50.0, rpm=2_000.0, elapsed_seconds=1.0)
-            for _ in range(60)
-        )
-        assert abs(total - 6_000_000.0) < 1.0
+    def test_exposure_score_and_classification(self, vehicle_class, seconds, label):
+        detector = exposed_detector(seconds, vehicle_class)
+        assert detector.s_idx == min(seconds, 60)
+        assert detector.compute_probability() == pytest.approx(min(seconds / 60, 1))
+        assert detector.classify() == label
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -778,7 +641,7 @@ class TestPdMAlertSchema:
         is selected as the primary output.
         """
         p_hdf = compute_hdf_probability(delta_t=8.0, rpm=1_200.0)
-        p_osf = compute_osf_probability(9_500.0, "L")
+        p_osf = compute_osf_probability(45.0, "L")
         primary_type = "HDF" if p_hdf >= p_osf else "OSF_ANOMALY"
         primary_prob = max(p_hdf, p_osf)
 
@@ -901,14 +764,8 @@ class TestPIDFormulaVerification:
         assert abs(delta_k - delta_c) < 1e-9
         assert abs(delta_k - 8.6) < 1e-9
 
-    def test_osf_anomaly_lower_bound_arithmetic(self):
-        """
-        Math check: 0.8 × 11 000 = 8 800 (Class L).
-        Verifies the anomaly zone arithmetic cited throughout US-003.
-        """
-        assert 0.8 * OSF_LIMITS["L"] == 8_800.0
-        assert 0.8 * OSF_LIMITS["M"] == 9_600.0
-        assert 0.8 * OSF_LIMITS["H"] == 10_400.0
+    def test_osf_horizon_seconds(self):
+        assert OSF_WINDOW_SECONDS == 60.0
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -982,23 +839,17 @@ class TestAlgorithmicExecutionSequence:
             engine_load=5.0,     # low load → low Wf → low S_idx
         )
         alert = self._process_frame(frame)
-        # HDF fires at 1.0; OSF S_idx = 5 × 900 × 1 = 4500, well below 11 000
+        # HDF fires at 1.0; low-load OSF exposure remains zero.
         assert alert.failure_probability == 1.0
         assert alert.failure_type == "HDF"
 
-    def test_current_frame_osf_stress_can_trigger_alert(self):
-        """OSF classification includes the current frame's stress increment."""
-        frame = _good_frame(
-            coolant_temp=90.0,
-            ambient_temp=25.0,
-            engine_rpm=2_000.0,
-            engine_load=6.0,
-        )
+    def test_healthy_steady_frame_has_no_osf_alert(self):
+        frame = _good_frame(coolant_temp=90.0, ambient_temp=25.0,
+                            engine_rpm=2000.0, engine_load=6.0)
         alert = self._process_frame(frame)
-
-        assert alert.failure_type == "OSF"
-        assert alert.failure_probability == 1.0
-        assert alert.is_anomaly is True
+        assert alert.failure_type == "NONE"
+        assert alert.failure_probability < 0.5
+        assert alert.is_anomaly is False
 
     def test_statistical_outlier_promotes_alert(self):
         """Extreme rolling-window outliers must affect alert classification."""

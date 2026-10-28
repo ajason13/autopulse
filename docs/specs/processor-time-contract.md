@@ -4,7 +4,8 @@ Implemented for [#119](https://github.com/ajason13/autopulse/issues/119) in
 [`PdMProcessor`](../../src/autopulse/analysis/pdm_processor.py), following the
 [ICE scoring decision](ice-scoring-policy.md#common-score-and-time-semantics).
 This is a supplied-data replay convention, not a vehicle sensor freshness or
-physical safety limit. Detector equation changes remain in #120 and #121.
+physical safety limit. OSF follows the implemented recent-exposure policy in
+#120; HDF eligibility remains in #121.
 
 `process_frame()` accepts ISO timestamps, including `Z` and explicit UTC offsets,
 and legacy numeric Unix **milliseconds** (integers or finite floats). Naive ISO
@@ -32,15 +33,16 @@ history. It adds zero OSF stress and returns zero HDF/OSF contributions. At a
 strictly greater than **60-second** gap since the last accepted frame, clear the
 previous session before processing the new frame as a first frame. Exactly 60
 seconds stays continuous. A gap never contributes cross-session stress or a
-thermal-rate comparison against stale coolant. This bound does not correct the
-legacy OSF equation within a continuous session; #120 owns that behavior.
+thermal-rate comparison against stale coolant. Within a continuous session,
+OSF integrates the previous accepted smoothed indicator over a rolling
+60-second horizon; see the [scoring policy](ice-scoring-policy.md#osf-decision-recent-exposure-fraction).
 
 `reset()` discards all six raw/median buffers, detector state and timestamp/coolant
 history, retaining the configured VIN hash, vehicle class and window capacity.
 A new processor is required for a different vehicle. No state is persisted.
 Reset followed by the same replay matches a fresh processor's alerts and state.
-Future detector interval histories and eligibility latches must participate in
-this same reset boundary when #120/#121 introduce them.
+OSF interval history and its held indicator participate in this reset boundary;
+future HDF eligibility latches must do so when #121 introduces them.
 
 Missing mandatory PIDs retain `SENSOR_ERROR` with the corresponding PID. Invalid
 or nonfinite consumed numeric sensor values return `SENSOR_ERROR`; the processor
@@ -57,13 +59,15 @@ frames or new telemetry collection is needed.
 The default window holds **60 samples**, not 60 elapsed seconds. First-to-last
 span is 59 seconds at 1 Hz, 29.5 at 2 Hz, and 118 at 0.5 Hz. The median width of
 3, EWMA coefficients, raw statistical windows and their sample-domain behavior
-are unchanged. Only the session gap uses elapsed time; statistical/filter output
-is not generally cadence invariant.
+are unchanged. The session gap and OSF exposure use elapsed time;
+statistical/filter output is not generally cadence invariant.
 
 Verification: [`test_pdm_temporal_contract.py`](../../tests/test_pdm_temporal_contract.py)
 covers policy T1/T2/R1 using production classes: full-state rejection snapshots,
 time representations, first-frame behavior, 60/60.001-second boundaries, large
 gaps, sensor/thermal/smoothing rejection, reset/replay equality and sample-count
-windows at multiple cadences. HDF arming and the new OSF exposure equation remain
-separate downstream work. These tests establish deterministic software behavior,
+windows at multiple cadences. OSF policy coverage lives in
+[`test_osf_exposure_policy.py`](../../tests/test_osf_exposure_policy.py); HDF arming
+remains separate downstream work. These tests establish deterministic software
+behavior,
 not calibrated failure prediction or vehicle accuracy.

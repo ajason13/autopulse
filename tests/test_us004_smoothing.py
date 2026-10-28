@@ -872,8 +872,7 @@ def test_processor_routes_smoothed_values_to_detectors_and_raw_values_to_statist
 ):
     """Isolate arbitration, preserving real smoothing, summaries and stat gates.
 
-    OSF's current calibration saturates on ordinary frames (#118/#120). Stub
-    only detector probabilities, capturing their inputs; a raw spike must still
+    Stub only detector outputs, capturing their inputs; a raw spike must still
     produce a statistical alert while both detector inputs remain smoothed.
     """
     processor = PdMProcessor("a" * 64)
@@ -889,7 +888,7 @@ def test_processor_routes_smoothed_values_to_detectors_and_raw_values_to_statist
         return 0.0
 
     monkeypatch.setattr(processor.hdf_detector, "compute_probability", capture_hdf)
-    monkeypatch.setattr(processor.osf_detector, "compute_stress_increment", capture_stress)
+    monkeypatch.setattr(processor.osf_detector, "update", capture_stress)
     monkeypatch.setattr(processor.osf_detector, "compute_probability", lambda: 0.0)
 
     raw = [baseline] * 30 + [spike] + [baseline] * 4

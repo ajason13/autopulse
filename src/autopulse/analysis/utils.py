@@ -3,17 +3,13 @@ from typing import Literal
 
 VehicleClass = Literal["L", "M", "H"]
 
-OSF_LIMITS: dict[VehicleClass, float] = {
-    "L": 11_000.0,
-    "M": 12_000.0,
-    "H": 13_000.0,
-}
+OSF_WINDOW_SECONDS: float = 60.0
 
 # HDF trigger thresholds (AI4I 2020 → OBD-II mapping)
 HDF_DELTA_T_THRESHOLD_K: float = 8.6   # ΔT below which critical HDF fires
 HDF_RPM_THRESHOLD: float = 1_380.0     # RPM below which critical HDF fires
 
-# Lugging penalty activation conditions (US-003 §OSF)
+# Experimental exposure indicator boundaries (ICE scoring policy)
 LUGGING_RPM_CEILING: float = 1_500.0
 LUGGING_LOAD_FLOOR: float = 80.0       # percent
 

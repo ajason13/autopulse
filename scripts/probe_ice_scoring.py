@@ -64,11 +64,10 @@ def observe(frames: list[dict]) -> dict:
 
 def main() -> None:
     osf = OSFDetector("L")
-    increment = osf.compute_stress_increment(18.0, 850.0, 1.0)
-    osf.update_stress_index(increment)
+    osf.update(18.0, 850.0, 0.0)
+    osf.update(18.0, 850.0, 1.0)
     direct_osf = {
-        "one_second_increment": increment,
-        "class_limit": osf.limit,
+        "recent_exposure_seconds": osf.s_idx,
         "classification": osf.classify(),
         "score_field": osf.compute_probability(),
     }
