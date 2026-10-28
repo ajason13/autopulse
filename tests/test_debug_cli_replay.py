@@ -191,6 +191,8 @@ def test_preview_alerts_outputs_hdf_alerts_partitioned_by_vin(tmp_path, capsys):
             ambient_temp=25.0,
         ),
     ]
+    # Each VIN seeds its own session before scoring an observed interval.
+    rows += [dict(row, timestamp="2026-05-26T10:00:01.000Z") for row in rows]
     path = write_jsonl(tmp_path, rows)
 
     exit_code = debug_main(["preview-alerts", "--jsonl", str(path)])
@@ -202,6 +204,25 @@ def test_preview_alerts_outputs_hdf_alerts_partitioned_by_vin(tmp_path, capsys):
     assert alerts[0]["failure_type"] == "HDF"
     assert alerts[0]["failure_probability"] > 0.0
     assert_no_raw_vin(captured.out)
+
+
+@pytest.mark.parametrize("rejected_time", [
+    "2026-05-26T10:00:00.000Z",  # duplicate
+    "2026-05-26T09:59:59.000Z",  # backward
+])
+def test_preview_alerts_skips_temporal_rejection_and_continues(tmp_path, capsys, rejected_time):
+    first = ice_row(engine_rpm=900.0, engine_load=5.0, coolant_temp=30.0, ambient_temp=25.0)
+    rows = [first, dict(first, timestamp=rejected_time, coolant_temp=100.0),
+            dict(first, timestamp="2026-05-26T10:00:01.000Z")]
+    path = write_jsonl(tmp_path, rows)
+    assert debug_main(["preview-alerts", "--jsonl", str(path)]) == 0
+    actual, _ = parsed_stdout(capsys)
+    clean = write_jsonl(tmp_path, [rows[0], rows[2]], filename="clean.jsonl")
+    assert debug_main(["preview-alerts", "--jsonl", str(clean)]) == 0
+    expected, _ = parsed_stdout(capsys)
+    assert actual == expected
+    assert len(actual) == 1
+    assert actual[0]["failure_type"] == "HDF"
 
 
 def test_preview_alerts_schema_invalid_frame_does_not_stop_vin_session(tmp_path, capsys):

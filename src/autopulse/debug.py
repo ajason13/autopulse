@@ -219,7 +219,12 @@ def _preview_alerts_command(args: argparse.Namespace) -> int:
             vin_hashed,
             PdMProcessor(vin_hashed=vin_hashed),
         )
-        alert = processor.process_frame(frame)
+        try:
+            alert = processor.process_frame(frame)
+        except ValueError as exc:
+            rejected_frames += 1
+            _log_validation_rejection(exc, row_index)
+            continue
         if alert.failure_type != "NONE" and alert.failure_probability > 0.0:
             alerts.append(_serialize_preview_alert(alert))
 
