@@ -8,6 +8,7 @@ from types import MappingProxyType
 from typing import Any, Mapping
 from uuid import uuid4
 
+from autopulse.analysis.pdm_processor import PdMAlert as ProcessorAlert
 from autopulse.debugging import get_logger, log_event
 
 
@@ -15,6 +16,9 @@ LOGGER = get_logger(__name__)
 _VIN_HASH_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 _RAW_VIN_PATTERN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 _VALID_FAILURE_TYPES = frozenset({"HDF", "OSF"})
+_PROCESSOR_FAILURE_TYPES = _VALID_FAILURE_TYPES | {
+    "OSF_ANOMALY", "STATISTICAL_ANOMALY", "SENSOR_ERROR", "NONE",
+}
 _VALID_EV_EVENT_TYPES = frozenset(
     {
         "EV_SCHEMA_REJECTION",
@@ -82,9 +86,14 @@ class EVTelemetryAlert:
     powertrain_type: str = "EV"
 
 
-def serialize_alert(alert: PdMAlert) -> dict[str, Any]:
-    """Serialize an internal PdM alert into a JSON-LD observation payload."""
+def serialize_alert(alert: PdMAlert | ProcessorAlert) -> dict[str, Any]:
+    """Export legacy or processor ICE observations; never export obd_frame.
+
+    Processor labels (including NONE and SENSOR_ERROR) are preserved without
+    filtering or relabeling. See docs/specs/ice-alert-export-contract.md.
+    """
     _validate_alert(alert)
+    summary = _sanitize_window_summary(alert.window_summary)
     log_event(
         LOGGER,
         logging.DEBUG,
@@ -94,15 +103,27 @@ def serialize_alert(alert: PdMAlert) -> dict[str, Any]:
         vin_hashed=alert.vin_hashed,
     )
 
-    return {
+    payload = {
         "@context": dict(_CONTEXT),
         "@type": "sosa:Observation",
         "@id": f"urn:uuid:{uuid4()}",
         "vin_hashed": alert.vin_hashed,
         "failure_probability": float(alert.failure_probability),
         "failure_type": alert.failure_type,
-        "window_summary": _sanitize_window_summary(alert.window_summary),
+        "window_summary": summary,
     }
+    if isinstance(alert, ProcessorAlert):
+        payload["@context"].update({
+            "timestamp": "autopulse:unixTimeMilliseconds",
+            "is_anomaly": "autopulse:isAnomaly",
+            "primary_pid": "autopulse:primaryPID",
+        })
+        payload.update(
+            timestamp=alert.timestamp,
+            is_anomaly=alert.is_anomaly,
+            primary_pid=alert.primary_pid,
+        )
+    return payload
 
 
 def serialize_ev_alert(alert: EVTelemetryAlert) -> dict[str, Any]:
@@ -127,14 +148,31 @@ def serialize_ev_alert(alert: EVTelemetryAlert) -> dict[str, Any]:
     }
 
 
-def _validate_alert(alert: PdMAlert) -> None:
-    if not isinstance(alert, PdMAlert):
-        raise TypeError("alert must be a PdMAlert instance.")
+def _validate_alert(alert: PdMAlert | ProcessorAlert) -> None:
+    if not isinstance(alert, (PdMAlert, ProcessorAlert)):
+        raise TypeError("alert must be an exporter or processor PdMAlert instance.")
 
     _validate_vin_hash(alert.vin_hashed)
     _validate_failure_probability(alert.failure_probability)
 
-    if alert.failure_type not in _VALID_FAILURE_TYPES:
+    if isinstance(alert, ProcessorAlert):
+        if (
+            not isinstance(alert.failure_type, str)
+            or alert.failure_type not in _PROCESSOR_FAILURE_TYPES
+        ):
+            raise ValueError("failure_type is not a supported processor outcome.")
+        if (
+            type(alert.timestamp) is not int
+            or not -62135596800000 <= alert.timestamp <= 253402300799999
+        ):
+            raise ValueError("timestamp must be integer Unix milliseconds in the processor range.")
+        if type(alert.is_anomaly) is not bool:
+            raise TypeError("is_anomaly must be a bool.")
+        if alert.primary_pid is not None and (
+            type(alert.primary_pid) is not int or not 0 <= alert.primary_pid <= 255
+        ):
+            raise ValueError("primary_pid must be a byte integer or None.")
+    elif alert.failure_type not in _VALID_FAILURE_TYPES:
         raise ValueError("failure_type must be exactly 'HDF' or 'OSF'.")
 
 
