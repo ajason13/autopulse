@@ -1,8 +1,7 @@
 # ICE experimental scoring policy
 
 **Decision:** #118, 2026-10-28 UTC. Accepted for the offline implementation
-issues listed below. Temporal handling (#119) and OSF (#120) are implemented;
-HDF eligibility (#121) remains pending. Observation baseline:
+issues listed below. Temporal handling (#119), OSF (#120), and HDF eligibility (#121) are implemented. Observation baseline:
 `e5957cd4f1bc1ea06f6d4552a3ceec13b016900d`.
 
 AutoPulse will treat ICE detector outputs as bounded experimental anomaly
@@ -81,8 +80,7 @@ observations; preserve this dated baseline, not tests that freeze these defects.
 
 The #119 temporal/reset portion is implemented as documented in the
 [processor time contract](processor-time-contract.md). OSF exposure is implemented
-in #120 as described below. HDF eligibility remains
-owned by #121; this decision's dated observations above retain their original
+in #120 as described below. HDF eligibility is implemented in #121; this decision's dated observations above retain their original
 baseline.
 
 1. A score lies in `[0, 1]`; zero means no contribution from that branch, including
@@ -198,8 +196,8 @@ trajectories; the existing smoothing/statistical windows remain sample based.
 
 ## HDF decision: an armed synthetic experiment
 
-Retain the existing HDF conjunction and sigmoid only as a **synthetic** scoring
-experiment in #121. Do not invent a universal coolant operating temperature or
+The existing HDF conjunction and sigmoid remain only as a **synthetic** scoring
+experiment implemented in #121. Do not invent a universal coolant operating temperature or
 claim the AI4I process variable is a vehicle thermal model. An observed
 warm-up latch prevents the specific near-ambient cold-start counterexample:
 
@@ -232,6 +230,35 @@ after arming, an unusual ambient change, or noisy sensors could still produce
 a false positive. It also misses a fixture starting already anomalous without
 an arming observation. Those are explicit limits of the experiment, not
 unresolved implementation decisions. No automotive HDF prediction is claimed.
+
+### HDF implementation and compatibility (#121)
+
+[`HDFDetector.update()`](../../src/autopulse/analysis/hdf_detector.py) owns the
+latch and current `score`, taking raw RPM/delta and smoothed RPM/delta from the
+processor after sensor/time guards pass. Missing ambient is represented by
+`None`, never an invented temperature. `armed` exposes the next-frame latch;
+`reset()` clears both latch and score. The processor's existing complete session
+reset creates a fresh detector, so even an already-warm first frame returns
+zero before arming for the following frame. Engine-off or ambient loss clears
+only HDF eligibility, leaving statistical/filter/thermal-guard state independent.
+
+The legacy static `compute_probability()` remains the pure equation for
+already-eligible synthetic inputs; it does **not** apply operating-state gates
+or maintain eligibility. Direct callers seeking the complete policy must use
+`update()` on accepted finite samples and call `reset()` at session boundaries.
+The processor enforces input/temporal rejection before detector updates. The
+`failure_probability` alert field retains its API name and experimental-score
+meaning. Existing alerts and inspectable `armed`/`score` state suffice for offline
+debugging; no frame logging or telemetry collection is added.
+
+[`test_hdf_eligibility_policy.py`](../../tests/test_hdf_eligibility_policy.py)
+covers H1–H6 and R1 through production classes and schema-validated synthetic
+fixtures, including raw-versus-smoothed arming, independent branch execution,
+full-state rejection snapshots, strict critical boundaries, full-window cooling,
+and reset/replay equality. Boundary fixtures explicitly use capacity one to
+remove smoothing latency; the normal warm-up/cooling fixtures use the default
+60-sample production filters. Scores establish deterministic fixture behavior,
+not vehicle accuracy or calibrated risk.
 
 ## Acceptance vectors for implementation
 
@@ -279,8 +306,8 @@ other repository design records; the Starlight site does not ingest this file.
 
 The owning implementations must run production-backed focused algorithm,
 processor and smoothing regressions, the full Python suite, required hosted
-checks, and fresh-context review. #119 and #120 are implemented; #121 is the
-next implementation in the offline track, with its #118 prerequisite complete.
+checks, and fresh-context review. #119, #120, and #121 are implemented. The next
+implementation in the offline track is #122 (optional ambient replay).
 The complete replay/export demonstration remains
 [#126](https://github.com/ajason13/autopulse/issues/126). Broader public wording
 cleanup remains [#130](https://github.com/ajason13/autopulse/issues/130), and
