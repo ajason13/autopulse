@@ -9,6 +9,7 @@
     "preview": "astro preview",
     "test:smoke": "playwright test --config playwright.smoke.config.ts",
     "test:e2e": "playwright test --config playwright.e2e.config.ts",
+    "test:lifecycle": "node --test tests/lifecycle/server.test.mjs",
     "astro": "astro"
   },
   "dependencies": {

@@ -17,7 +17,7 @@ test('homepage renders the AutoPulse documentation shell', async ({ page }) => {
 	);
 });
 
-test('homepage internal links resolve within the GitHub Pages base path', async ({ page }) => {
+test('homepage internal links resolve within the GitHub Pages base path', async ({ page, baseURL }) => {
 	await page.goto(homePath);
 
 	const links = [
@@ -30,7 +30,7 @@ test('homepage internal links resolve within the GitHub Pages base path', async 
 	for (const link of links) {
 		const url = await link.evaluate((anchor) => new URL(anchor.href));
 
-		expect(url.origin).toBe('http://127.0.0.1:4321');
+		expect(url.origin).toBe(new URL(baseURL!).origin);
 		expect(url.pathname).toMatch(/^\/autopulse\//);
 	}
 });

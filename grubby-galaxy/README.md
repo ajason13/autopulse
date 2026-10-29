@@ -50,7 +50,18 @@ Run the Starlight homepage smoke suite with:
 npm run test:smoke
 ```
 
-This builds the docs, starts an Astro preview server, and checks the homepage shell, mobile menu, desktop sidebar, and GitHub Pages base-path links.
+This builds the current docs, starts its own foreground Astro preview server, and checks the homepage shell, mobile menu, desktop sidebar, and GitHub Pages base-path links. Both browser suites wait for their own server to finish building and bind its port; they never reuse an existing server. An occupied port fails verification without stopping the existing process or switching ports silently. Playwright stops its owned server after success or failure (with a forced process-tree cleanup if graceful shutdown times out).
+
+The default origin is `http://127.0.0.1:4321`, with pages under `/autopulse/`. To leave a dev/preview server running on that port, select a free verification port using `AUTOPULSE_DOCS_PORT`:
+
+```sh
+AUTOPULSE_DOCS_PORT=4322 npm run test:smoke
+AUTOPULSE_DOCS_PORT=4322 npm run test:e2e
+```
+
+In PowerShell, set `$env:AUTOPULSE_DOCS_PORT = '4322'` before running the npm commands. Run the suites sequentially within a checkout because each rebuilds `dist/`. The test server uses Astro's programmatic build/preview API so agent-triggered CLI backgrounding and preview lock files cannot detach it from Playwright.
+
+`npm run test:lifecycle` exercises stale HTTP 200/404 servers, rebuilding stale output, and port cleanup after a passing and deliberately failing request probe. Run it after `npm run build` and separately from the browser suites; CI runs it before smoke/e2e.
 
 Run the broader Starlight regression suite with:
 
