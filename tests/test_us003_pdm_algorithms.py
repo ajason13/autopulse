@@ -201,7 +201,7 @@ class TestHDFCriticalTrigger:
         assert p < PROB_CRITICAL
 
     def test_worst_case_extreme_values_returns_critical(self):
-        """ΔT = 0 K (saturated coolant), RPM = 0 (engine dragging) → critical."""
+        """Legacy pure equation; update() gates raw engine-off before scoring."""
         p = compute_hdf_probability(delta_t=0.0, rpm=0.0)
         assert p == PROB_CRITICAL
 
@@ -780,17 +780,23 @@ class TestAlgorithmicExecutionSequence:
     PdMProcessor until src/autopulse/analysis/ is implemented.
     """
 
-    def _process_frame(self, frame: dict, vehicle_class: VehicleClass = "L") -> PdMAlert:
+    def _process_frame(self, frame: dict, vehicle_class: VehicleClass = "L", *, eligible_hdf=False) -> PdMAlert:
         """
         Uses the real PdMProcessor to execute the 5-step sequence.
         """
         processor = PdMProcessor(
             vin_hashed=frame.get("vin_hashed", _BASE_VIN),
-            vehicle_class=vehicle_class
+            vehicle_class=vehicle_class,
+            window_size=1 if eligible_hdf else 60,
         )
         # Branch arbitration needs an observed interval; first frames now seed
         # a session with zero HDF/OSF contributions (#119).
-        seed = dict(frame, timestamp=processor._parse_timestamp(frame["timestamp"]) - 1000)
+        seed = dict(frame, timestamp=processor._parse_timestamp(frame["timestamp"]) -
+                    (60000 if eligible_hdf else 1000))
+        if eligible_hdf:
+            # Observe warmth before injecting a synthetic eligible fault. Capacity
+            # one removes smoothing latency; full-window cooling is covered in H3.
+            seed["coolant_temp"] = frame["ambient_temp"] + 15
         processor.process_frame(seed)
         return processor.process_frame(frame)
 
@@ -808,7 +814,7 @@ class TestAlgorithmicExecutionSequence:
         → failure_type = 'HDF', probability = 1.0.
         """
         frame = _good_frame(coolant_temp=30.0, ambient_temp=25.0, engine_rpm=900.0)
-        alert = self._process_frame(frame)
+        alert = self._process_frame(frame, eligible_hdf=True)
         assert alert.failure_type == "HDF"
         assert alert.failure_probability == 1.0
         assert alert.is_anomaly is True
@@ -838,7 +844,7 @@ class TestAlgorithmicExecutionSequence:
             engine_rpm=900.0,    # below 1380
             engine_load=5.0,     # low load → low Wf → low S_idx
         )
-        alert = self._process_frame(frame)
+        alert = self._process_frame(frame, eligible_hdf=True)
         # HDF fires at 1.0; low-load OSF exposure remains zero.
         assert alert.failure_probability == 1.0
         assert alert.failure_type == "HDF"
@@ -934,22 +940,11 @@ class TestAlgorithmicExecutionSequence:
         assert processor.coolant_buffer.to_list() == [85.0]
 
     def test_engine_off_frame_produces_none_alert(self):
-        """
-        Key-On Engine-Off: RPM = 0, Load = 0, Wf = 0.
-        ΔT = coolant − ambient (may be small but RPM = 0 ≥ threshold).
-        No fault should be raised.
-        """
+        """Raw engine-off suppresses the HDF/OSF branches (#121)."""
         frame = _good_frame(
-            engine_rpm=0.0,
-            engine_load=0.0,
-            vehicle_speed=0,
-            coolant_temp=20.0,
-            ambient_temp=18.0,   # ΔT = 2 K, RPM = 0 → NOT < 1380 and < 8.6 K
+            engine_rpm=0.0, engine_load=0.0, vehicle_speed=0,
+            coolant_temp=20.0, ambient_temp=18.0,
         )
-        # ΔT = 2 K < 8.6 K but RPM = 0 < 1380 → HDF critical fires
-        # This is a known edge case: engine off, ΔT is naturally small.
-        # The processor MUST handle RPM=0 without crashing; alert content
-        # depends on implementation policy (KOEO suppression is acceptable).
         alert = self._process_frame(frame)
-        assert alert is not None
-        assert 0.0 <= alert.failure_probability <= 1.0
+        assert alert.failure_type == "NONE"
+        assert alert.failure_probability == 0

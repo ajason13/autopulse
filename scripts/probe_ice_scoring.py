@@ -50,6 +50,8 @@ def observe(frames: list[dict]) -> dict:
                 "failure_type": alert.failure_type,
                 "score_field": alert.failure_probability,
                 "s_idx": processor.osf_detector.s_idx,
+                "hdf_score": processor.hdf_detector.score,
+                "hdf_armed": processor.hdf_detector.armed,
             }
     return {
         "frames": len(frames),
@@ -58,6 +60,8 @@ def observe(frames: list[dict]) -> dict:
             "failure_type": alert.failure_type,
             "score_field": alert.failure_probability,
             "s_idx": processor.osf_detector.s_idx,
+            "hdf_score": processor.hdf_detector.score,
+            "hdf_armed": processor.hdf_detector.armed,
         },
     }
 
@@ -75,11 +79,13 @@ def main() -> None:
     direct_osf["s_idx_after_reset"] = osf.s_idx
     print(json.dumps({
         "direct_osf_idle": direct_osf,
-        "direct_hdf_engine_off": HDFDetector.compute_probability(0.0, 0.0),
+        "legacy_pure_hdf_equation_at_zero": HDFDetector.compute_probability(0.0, 0.0),
+        "gated_hdf_engine_off": HDFDetector().update(
+            raw_rpm=0, raw_delta_t=0, smoothed_delta_t=0, smoothed_rpm=0),
         "idle_600_seconds": observe([frame(i) for i in range(601)]),
-        "engine_off": observe([frame(0, engine_rpm=0.0, engine_load=0.0,
-                                           coolant_temp=22.0)]),
-        "cold_start": observe([frame(0, coolant_temp=22.0)]),
+        "engine_off": observe([frame(i, engine_rpm=0.0, engine_load=0.0,
+                                     coolant_temp=22.0) for i in range(2)]),
+        "cold_start": observe([frame(i, coolant_temp=22.0 + i) for i in range(15)]),
     }, indent=2, sort_keys=True, allow_nan=False))
 
 

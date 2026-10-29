@@ -203,10 +203,11 @@ class PdMProcessor:
         smoothed_delta_t = (
             smoothed_coolant - float(ambient) if ambient is not None else None
         )
-        p_hdf = (
-            self.hdf_detector.compute_probability(smoothed_delta_t, smoothed_rpm)
-            if not new_session and smoothed_delta_t is not None
-            else 0.0
+        p_hdf = self.hdf_detector.update(
+            raw_rpm=rpm,
+            raw_delta_t=coolant - ambient if ambient is not None else None,
+            smoothed_delta_t=smoothed_delta_t,
+            smoothed_rpm=smoothed_rpm,
         )
         if rpm == 0:
             # Raw engine-off bypasses lagging smoothing for this branch only.

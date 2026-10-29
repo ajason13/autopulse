@@ -181,18 +181,14 @@ def test_replay_ice_security_violation_uses_safe_guard_event(tmp_path, capsys):
 def test_preview_alerts_outputs_hdf_alerts_partitioned_by_vin(tmp_path, capsys):
     healthy_vin = "a" * 64
     fault_vin = "b" * 64
-    rows = [
-        ice_row(vin_hashed=healthy_vin, engine_load=5.0),
-        ice_row(
-            vin_hashed=fault_vin,
-            engine_rpm=900.0,
-            engine_load=5.0,
-            coolant_temp=30.0,
-            ambient_temp=25.0,
-        ),
-    ]
-    # Each VIN seeds its own session before scoring an observed interval.
-    rows += [dict(row, timestamp="2026-05-26T10:00:01.000Z") for row in rows]
+    seeds = [ice_row(vin_hashed=vin, engine_rpm=900.0, engine_load=5.0,
+                     coolant_temp=88.0, ambient_temp=25.0)
+             for vin in (healthy_vin, fault_vin)]
+    # Both sessions observe warmth. A synthetic ambient change then drives only
+    # the second VIN's eligible HDF delta below 8.6 K, without a coolant jump.
+    rows = seeds + [dict(row, timestamp="2026-05-26T10:00:01.000Z",
+                        ambient_temp=80.0 if row["vin_hashed"] == fault_vin else 25.0)
+                    for row in seeds]
     path = write_jsonl(tmp_path, rows)
 
     exit_code = debug_main(["preview-alerts", "--jsonl", str(path)])
@@ -202,7 +198,7 @@ def test_preview_alerts_outputs_hdf_alerts_partitioned_by_vin(tmp_path, capsys):
     assert len(alerts) == 1
     assert alerts[0]["vin_hashed"] == fault_vin
     assert alerts[0]["failure_type"] == "HDF"
-    assert alerts[0]["failure_probability"] > 0.0
+    assert alerts[0]["failure_probability"] == 1.0
     assert_no_raw_vin(captured.out)
 
 
@@ -211,9 +207,9 @@ def test_preview_alerts_outputs_hdf_alerts_partitioned_by_vin(tmp_path, capsys):
     "2026-05-26T09:59:59.000Z",  # backward
 ])
 def test_preview_alerts_skips_temporal_rejection_and_continues(tmp_path, capsys, rejected_time):
-    first = ice_row(engine_rpm=900.0, engine_load=5.0, coolant_temp=30.0, ambient_temp=25.0)
+    first = ice_row(engine_rpm=900.0, engine_load=5.0, coolant_temp=88.0, ambient_temp=25.0)
     rows = [first, dict(first, timestamp=rejected_time, coolant_temp=100.0),
-            dict(first, timestamp="2026-05-26T10:00:01.000Z")]
+            dict(first, timestamp="2026-05-26T10:00:01.000Z", ambient_temp=80.0)]
     path = write_jsonl(tmp_path, rows)
     assert debug_main(["preview-alerts", "--jsonl", str(path)]) == 0
     actual, _ = parsed_stdout(capsys)
@@ -223,6 +219,16 @@ def test_preview_alerts_skips_temporal_rejection_and_continues(tmp_path, capsys,
     assert actual == expected
     assert len(actual) == 1
     assert actual[0]["failure_type"] == "HDF"
+
+
+@pytest.mark.parametrize("rpm", [0, 850])
+def test_preview_alerts_cold_unarmed_stream_has_no_mechanical_alert(tmp_path, capsys, rpm):
+    first = ice_row(engine_rpm=rpm, engine_load=18.0 if rpm else 0.0,
+                    coolant_temp=22.0, ambient_temp=22.0)
+    path = write_jsonl(tmp_path, [first, dict(first, timestamp="2026-05-26T10:00:01.000Z")])
+    assert debug_main(["preview-alerts", "--jsonl", str(path)]) == 0
+    alerts, _ = parsed_stdout(capsys)
+    assert alerts == []
 
 
 def test_preview_alerts_schema_invalid_frame_does_not_stop_vin_session(tmp_path, capsys):

@@ -5,7 +5,7 @@ Implemented for [#119](https://github.com/ajason13/autopulse/issues/119) in
 [ICE scoring decision](ice-scoring-policy.md#common-score-and-time-semantics).
 This is a supplied-data replay convention, not a vehicle sensor freshness or
 physical safety limit. OSF follows the implemented recent-exposure policy in
-#120; HDF eligibility remains in #121.
+#120; HDF eligibility follows the implemented #121 warm-up latch.
 
 `process_frame()` accepts ISO timestamps, including `Z` and explicit UTC offsets,
 and legacy numeric Unix **milliseconds** (integers or finite floats). Naive ISO
@@ -42,7 +42,7 @@ history, retaining the configured VIN hash, vehicle class and window capacity.
 A new processor is required for a different vehicle. No state is persisted.
 Reset followed by the same replay matches a fresh processor's alerts and state.
 OSF interval history and its held indicator participate in this reset boundary;
-future HDF eligibility latches must do so when #121 introduces them.
+the HDF eligibility latch and current score also clear on reset (#121).
 
 Missing mandatory PIDs retain `SENSOR_ERROR` with the corresponding PID. Invalid
 or nonfinite consumed numeric sensor values return `SENSOR_ERROR`; the processor
@@ -68,6 +68,7 @@ time representations, first-frame behavior, 60/60.001-second boundaries, large
 gaps, sensor/thermal/smoothing rejection, reset/replay equality and sample-count
 windows at multiple cadences. OSF policy coverage lives in
 [`test_osf_exposure_policy.py`](../../tests/test_osf_exposure_policy.py); HDF arming
-remains separate downstream work. These tests establish deterministic software
-behavior,
-not calibrated failure prediction or vehicle accuracy.
+coverage lives in
+[`test_hdf_eligibility_policy.py`](../../tests/test_hdf_eligibility_policy.py).
+These tests establish deterministic software behavior, not calibrated failure
+prediction or vehicle accuracy.
