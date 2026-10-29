@@ -71,6 +71,13 @@ npm run test:e2e
 
 This checks every generated docs route, interior-page mobile and desktop navigation, search dialog behavior, and internal links staying under the `/autopulse/` GitHub Pages base path.
 
+## Mermaid Troubleshooting
+
+If the architecture diagram is missing, reproduce with the pinned Node version,
+`npm ci`, and the current-build browser suites before changing dependencies or
+Mermaid configuration. The [clean-install verification record](../docs/qa/docs-mermaid-clean-install.md)
+includes the tested versions, results, and a bounded local recovery procedure.
+
 ## Key Documentation
 
 The specifications are available at the following local routes (when the dev server is running):
