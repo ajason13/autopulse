@@ -80,6 +80,7 @@ US001_BOUNDS: dict[str, tuple[float, float]] = {
     "engine_rpm": (0.0, 9500.0),
     "vehicle_speed": (0.0, 255.0),
     "coolant_temp": (-40.0, 140.0),
+    "ambient_temp": (-40.0, 80.0),
     "engine_load": (0.0, 100.0),
     "stft_bank1": (-50.0, 50.0),
     "ltft_bank1": (-50.0, 50.0),
@@ -137,6 +138,7 @@ class DataPacket:
     stft_bank1: float
     ltft_bank1: float
     _raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
+    ambient_temp: float | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         """Freeze the raw source snapshot used for audit trails."""
@@ -144,7 +146,7 @@ class DataPacket:
 
     def to_dict(self) -> dict[str, Any]:
         """Return the replay-facing frame payload."""
-        return {
+        payload = {
             "timestamp": self.timestamp,
             "vin_hashed": self.vin_hashed,
             "protocol": self.protocol,
@@ -155,6 +157,9 @@ class DataPacket:
             "stft_bank1": self.stft_bank1,
             "ltft_bank1": self.ltft_bank1,
         }
+        if self.ambient_temp is not None:
+            payload["ambient_temp"] = self.ambient_temp
+        return payload
 
     def to_schema_dict(self) -> dict[str, Any]:
         """Return the canonical US-001 schema payload."""
@@ -307,7 +312,7 @@ class CSVProvider(LogProvider):
             return value
         if key == "vehicle_speed":
             return int(value)
-        if key in NUMERIC_FIELDS:
+        if key in NUMERIC_FIELDS or key == "ambient_temp":
             return float(value)
         return value
 
@@ -575,6 +580,10 @@ class MockAdapter(OBDAdapter):
             engine_load=self._float_field(row, "engine_load"),
             stft_bank1=self._float_field(row, "stft_bank1"),
             ltft_bank1=self._float_field(row, "ltft_bank1"),
+            ambient_temp=(
+                self._float_field(row, "ambient_temp")
+                if "ambient_temp" in row else None
+            ),
             _raw=raw,
         )
         self._validate_packet(packet)

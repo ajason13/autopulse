@@ -149,6 +149,67 @@ class TestMockAdapterNormalisation:
         frame = connected_adapter.fetch_frame()
         assert isinstance(frame, DataPacket)
 
+    @pytest.mark.parametrize("ambient", [-40.0, 0, 22.5, 80.0])
+    @pytest.mark.parametrize("provider_type", [JSONLProvider, CSVProvider])
+    @pytest.mark.parametrize("protocol,canonical", [
+        ("J1979_MODE01", "SAE_J1979"),
+        ("J1979_2_SERVICE22", "SAE_J1979-2"),
+    ])
+    def test_optional_ambient_round_trip(self, ambient, provider_type, protocol, canonical):
+        from autopulse.data.validator import validate_frame
+
+        row = _good_row(protocol=protocol, ambient_temp=ambient)
+        source = {key: str(value) for key, value in row.items()} if provider_type is CSVProvider else row
+        adapter = MockAdapter(provider_type([source]))
+        adapter.connect()
+        try:
+            packet = adapter.fetch_frame()
+        finally:
+            adapter.disconnect()
+        assert packet.ambient_temp == ambient
+        assert isinstance(packet.ambient_temp, float)
+        assert packet.to_dict() == row
+        canonical_row = dict(row, protocol=canonical)
+        assert packet.to_schema_dict() == canonical_row
+        validate_frame(canonical_row)
+        assert json.loads(json.dumps(packet.to_schema_dict(), allow_nan=False)) == canonical_row
+
+    @pytest.mark.parametrize("provider_type", [JSONLProvider, CSVProvider])
+    def test_absent_ambient_is_omitted(self, provider_type):
+        row = _good_row()
+        adapter = MockAdapter(provider_type([row]))
+        adapter.connect()
+        try:
+            packet = adapter.fetch_frame()
+        finally:
+            adapter.disconnect()
+        assert packet.ambient_temp is None
+        assert packet.to_dict() == row
+        assert "ambient_temp" not in packet.to_schema_dict()
+
+    @pytest.mark.parametrize("ambient", [
+        None, True, False, "22.5", "bad", [], {}, -40.001, 80.001,
+        float("nan"), float("inf"), float("-inf"),
+    ])
+    def test_invalid_supplied_ambient_is_rejected(self, ambient):
+        adapter = MockAdapter(JSONLProvider([_good_row(ambient_temp=ambient)]))
+        adapter.connect()
+        try:
+            with pytest.raises(ValidationError):
+                adapter.fetch_frame()
+        finally:
+            adapter.disconnect()
+
+    @pytest.mark.parametrize("ambient", ["", "bad", "nan", "inf", "-inf", "-40.001", "80.001"])
+    def test_invalid_csv_ambient_is_rejected(self, ambient):
+        adapter = MockAdapter(CSVProvider([_good_row(ambient_temp=ambient)]))
+        adapter.connect()
+        try:
+            with pytest.raises((ValueError, ValidationError)):
+                adapter.fetch_frame()
+        finally:
+            adapter.disconnect()
+
     def test_all_required_fields_present(self, connected_adapter):
         frame = connected_adapter.fetch_frame()
         packet_keys = set(frame.to_dict().keys())
@@ -1126,3 +1187,69 @@ def test_compatibility_exports_are_production_subjects():
     ):
         for name in names:
             assert getattr(module, name) is getattr(replay_module, name)
+
+
+def test_packet_ambient_preserves_compatibility_constructor_and_serialization():
+    from autopulse.adapters import DataPacket as CompatibilityPacket
+
+    row = _good_row()
+    raw = {"source": "synthetic"}
+    # The historical tenth positional argument remains the raw snapshot.
+    legacy = CompatibilityPacket(*row.values(), raw)
+    assert legacy.to_dict() == row
+    assert legacy._raw == raw
+    packet = CompatibilityPacket(*row.values(), raw, ambient_temp=22.5)
+    assert packet.to_dict() == dict(row, ambient_temp=22.5)
+    assert packet.to_schema_dict() == dict(row, protocol="SAE_J1979", ambient_temp=22.5)
+    assert packet._raw == raw
+
+
+@pytest.mark.parametrize("provider_type", [JSONLProvider, CSVProvider])
+@pytest.mark.parametrize("supplied", [False, True])
+def test_replay_ambient_reaches_production_hdf(provider_type, supplied, replay_clock):
+    from autopulse.analysis.pdm_processor import PdMProcessor
+
+    rows = [_good_row(timestamp=f"2025-01-15T10:00:0{second}+00:00",
+                      engine_rpm=850, engine_load=18, coolant_temp=88)
+            for second in range(3)]
+    if supplied:
+        # Observe warmth, then a synthetic ambient change drives an eligible
+        # HDF fault without a coolant rate jump. Omission disarms HDF instead.
+        for row, ambient in zip(rows, [25, 80, None]):
+            if ambient is not None:
+                row["ambient_temp"] = ambient
+    replay = LogReplayer(MockAdapter(provider_type(rows)))
+    replay.start(max_frames=3)
+    try:
+        replay.join()
+    finally:
+        replay.stop()
+    assert not replay.errors
+    assert len(replay.frames) == 3
+    processor = PdMProcessor(_VIN)
+    alerts = []
+    for index, packet in enumerate(replay.frames):
+        alert = processor.process_frame(packet.to_schema_dict())
+        alerts.append(alert)
+        assert alert.failure_type != "SENSOR_ERROR"
+        assert processor.hdf_detector.armed == (supplied and index < 2)
+        if index == 1:
+            assert processor.hdf_detector.score == (1 if supplied else 0)
+            assert (alert.failure_type == "HDF") == supplied
+    assert processor.hdf_detector.score == 0
+    assert alerts[-1].failure_type != "HDF"
+
+
+def test_replay_rejects_invalid_ambient_then_preserves_next_valid_frame(replay_clock):
+    replay = LogReplayer(MockAdapter(JSONLProvider([
+        _good_row(ambient_temp=None), _good_row(ambient_temp=22.5),
+    ])))
+    replay.start(max_frames=2)
+    try:
+        replay.join()
+    finally:
+        replay.stop()
+    assert len(replay.errors) == 1
+    assert isinstance(replay.errors[0], ValidationError)
+    assert len(replay.frames) == 1
+    assert replay.frames[0].to_schema_dict()["ambient_temp"] == 22.5
