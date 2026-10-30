@@ -126,6 +126,33 @@ Replay-facing protocol aliases are supported for harness ergonomics:
 | `J1979_MODE01` | `SAE_J1979` |
 | `J1979_2_SERVICE22` | `SAE_J1979-2` |
 
+### Optional ambient temperature and packet compatibility
+
+Production replay lives in `autopulse.virtual_replay`. Compatibility imports
+from `autopulse.adapters` (`MockAdapter`, `DataPacket`), `autopulse.providers`
+(`JSONLProvider`, `CSVProvider`), and `autopulse.replayer` (`LogReplayer`) refer
+to those same implementations.
+
+`MockAdapter` preserves supplied `ambient_temp` in degrees Celsius through
+`DataPacket.ambient_temp`, `to_dict()`, and `to_schema_dict()`. The existing
+US-001 range is inclusive −40 to 80 °C; null, booleans, non-finite numbers,
+invalid types, and out-of-range values are rejected. JSONL requires a numeric
+value; CSV converts numeric text just as it does for the core PIDs. An empty
+CSV cell is invalid; omit the column when ambient temperature is unavailable.
+
+`DataPacket` accepts `ambient_temp` as an optional keyword argument, defaulting
+to `None`; both serializers omit the key for that default. The existing
+positional constructor, including its tenth `_raw` snapshot argument, is
+preserved. Explicit null in a source row is rejected rather than treated as
+absence. Direct packet construction remains a data container; adapter output
+passes schema validation before dispatch.
+
+Pass `packet.to_schema_dict()` to `PdMProcessor.process_frame()` to supply the
+canonical protocol and optional ambient value. Missing ambient temperature
+disarms HDF under the [ICE scoring policy](https://github.com/ajason13/autopulse/blob/main/docs/specs/ice-scoring-policy.md); replay
+does not invent a value. This is offline normalization only and adds no live
+PID polling or new vehicle-validation claim.
+
 ## Timing Engine
 
 `LogReplayer` drives a connected `MockAdapter` on a background thread at a deterministic cadence. It collects frames, replay errors, and dispatch timestamps so tests can assert both data correctness and timing behavior.
