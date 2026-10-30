@@ -1,5 +1,15 @@
 # Selective Skills Pilot — 2026-08-11
 
+**Closed 2026-10-30: INCONCLUSIVE.** The six implementation tasks merged, but
+missing active-time/token measurements and no recorded rework reduction leave
+the predeclared adoption threshold unmet. No practice is adopted by this pilot.
+Closeout is tracked in [#136](https://github.com/ajason13/autopulse/issues/136).
+
+The design, delivery terms, and task notes below describe the August experiment.
+References to Notion, Builder/Advisor modes, `CONTEXT.md`, and external reviewers
+are historical; current [AGENTS.md](../../AGENTS.md) and GitHub Issues govern
+repository work. This record does not establish another workflow or tracker.
+
 ## Decision this pilot informs
 
 Decide whether AutoPulse should vendor and maintain a trimmed adaptation of two
@@ -8,9 +18,9 @@ engineering practices from `mattpocock/skills`:
 1. a Builder-owned hard-bug diagnosis loop; and
 2. a periodic context-writing hygiene review for agent-facing documents.
 
-This is an experiment, not a change to the Multi-Agent SDLC. Notion remains
-the authoritative project tracker and policy source; this document is the
-portable repository handoff and measurement record.
+At pilot launch, this experiment did not change the then-applicable Multi-Agent
+SDLC; Notion was named as the tracker and policy source. This document retains
+the experiment design and measurement record for historical reference.
 
 ## Boundaries
 
@@ -85,25 +95,71 @@ These are context-load indicators, not token measurements.
 
 | Pair/task | Arm | Comparable because | Active min | Tokens | Agents | Tools | Red-capable loop | Rework cycles | Verification | 14-day outcome | Notes |
 | --- | --- | --- | ---: | --- | ---: | ---: | --- | ---: | --- | --- | --- |
-| [P1 control / #53](https://github.com/ajason13/autopulse/issues/53) | control | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 10 | yes; targeted pytest | 0 | Targeted 2 passed; US-002 and full pytest passed | Not yet observable | Merged 2026-08-12; observability unchanged |
-| [P1 diagnosis / #54](https://github.com/ajason13/autopulse/issues/54) | diagnosis | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 6 | yes; targeted pytest and standalone repro | 0 | Targeted 1 passed; US-002 and full pytest passed | Not yet observable | Merged 2026-08-12; observability unchanged |
-| [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 9 | yes; isolated source-only pytest | 0 | Targeted 1 passed; focused and full pytest passed | Not yet observable | Merged 2026-08-12; observability unchanged |
-| [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 8 | yes; targeted parser pytest and standalone repro | 0 | Targeted 8 passed; US-002 and full pytest passed | Not yet observable | Merged 2026-08-12; observability unchanged |
-| [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Static route check and Starlight build passed | Not yet observable | Merged 2026-08-12; docs-only, observability unchanged |
-| [P3 context hygiene / #57](https://github.com/ajason13/autopulse/issues/57) | context-hygiene | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Node source check and Starlight build passed | Not yet observable | Merged 2026-08-12; 16,931 always-loaded bytes unchanged; 4 authoritative sources |
+| [P1 control / #53](https://github.com/ajason13/autopulse/issues/53) | control | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 10 | yes; targeted pytest | 0 | Targeted 2 passed; US-002 and full pytest passed | none known; limited retrospective review | Merged 2026-08-12; observability unchanged |
+| [P1 diagnosis / #54](https://github.com/ajason13/autopulse/issues/54) | diagnosis | Offline replay timing/state defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 6 | yes; targeted pytest and standalone repro | 0 | Targeted 1 passed; US-002 and full pytest passed | none known; limited retrospective review | Merged 2026-08-12; observability unchanged |
+| [P2 control / #56](https://github.com/ajason13/autopulse/issues/56) | control | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 9 | yes; isolated source-only pytest | 0 | Targeted 1 passed; focused and full pytest passed | none known; limited retrospective review | Merged 2026-08-12; observability unchanged |
+| [P2 diagnosis / #55](https://github.com/ajason13/autopulse/issues/55) | diagnosis | Offline replay developer-compatibility defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 8 | yes; targeted parser pytest and standalone repro | 0 | Targeted 8 passed; US-002 and full pytest passed | none known; limited retrospective review | Merged 2026-08-12; observability unchanged |
+| [P3 control / #58](https://github.com/ajason13/autopulse/issues/58) | control | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Static route check and Starlight build passed | none known in window; see later #58 residual | Merged 2026-08-12; docs-only, observability unchanged |
+| [P3 context hygiene / #57](https://github.com/ajason13/autopulse/issues/57) | context-hygiene | Starlight local-developer documentation defect; paired before implementation | UNAVAILABLE | UNAVAILABLE | 1 | 4 | not applicable | 0 | Node source check and Starlight build passed | none known; limited retrospective review | Merged 2026-08-12; 16,931 always-loaded bytes unchanged; 4 authoritative sources |
 
-## Pilot status — observation phase
+## Pilot closeout — 2026-10-30
 
-All six implementation tasks merged on 2026-08-12. Record an escaped defect,
-regression, required correction, or governance breach against each task through
-2026-08-26 inclusive. Do not claim adoption, token efficiency, or a causal
-quality effect before this observation window closes.
+**Final result: INCONCLUSIVE; no pilot-based adoption.** All six implementation
+tasks merged on 2026-08-12. The declared quality window ended 2026-08-26
+inclusive, and the 30-day limit from the 2026-08-11 plan ended 2026-09-10.
+This is a late closeout, not an extension or restart of the experiment.
 
-Token and active-time comparisons are **inconclusive**: this Codex surface did
-not expose session usage or an active-work timer for any pilot task. The final
-decision may still evaluate safety, verification, rework, user round-trips,
-and the Builder notes, but must record that the pilot did not measure the
-predeclared token/time thresholds.
+### Available quality evidence
+
+The closeout checked the six PR bodies, merge dates, CI results, review/comment
+histories, linked issue bodies/comments, and the repository issue inventory for
+2026-08-12 through 2026-08-26. All six PRs report a successful Python CI check;
+the ledger retains their task-specific verification. The PRs have no submitted
+reviews or comments, and the six linked issues have no reports of pilot defects
+in that window. The issue inventory for that date range contains only the six
+pilot tasks. These are limited retrospective GitHub observations, not proof of
+comprehensive monitoring, vehicle quality, or absence of defects. No external
+tracker or private feedback history was available to this closeout.
+
+| Task | Merged implementation | Merge date (UTC) | Available 14-day quality outcome |
+| --- | --- | --- | --- |
+| [#53](https://github.com/ajason13/autopulse/issues/53) | [#59](https://github.com/ajason13/autopulse/pull/59) | 2026-08-12 | none known in checked records |
+| [#54](https://github.com/ajason13/autopulse/issues/54) | [#60](https://github.com/ajason13/autopulse/pull/60) | 2026-08-12 | none known in checked records |
+| [#56](https://github.com/ajason13/autopulse/issues/56) | [#61](https://github.com/ajason13/autopulse/pull/61) | 2026-08-12 | none known in checked records |
+| [#55](https://github.com/ajason13/autopulse/issues/55) | [#62](https://github.com/ajason13/autopulse/pull/62) | 2026-08-12 | none known in checked records |
+| [#58](https://github.com/ajason13/autopulse/issues/58) | [#63](https://github.com/ajason13/autopulse/pull/63) | 2026-08-12 | none known in window; later residual documented below |
+| [#57](https://github.com/ajason13/autopulse/issues/57) | [#64](https://github.com/ajason13/autopulse/pull/64) | 2026-08-12 | none known in checked records |
+
+The October issue reconciliation records #53–#57 as complete against their
+original implementation criteria. For #58, PR #63 corrected the two
+specification-route examples; the later reconciliation identified remaining
+homepage/local URL omissions. Those residual examples were resolved separately
+by [PR #165](https://github.com/ajason13/autopulse/pull/165), merged 2026-10-30,
+and #58 is now closed. This later-discovered acceptance gap qualifies the
+original control-task completion claim; it is not a new pilot task, a measured
+August rework cycle, or evidence that the treatment caused better quality.
+The historical verification and zero recorded rework counts remain as recorded.
+
+### Decision against the predeclared rule
+
+- **Quality:** no treatment defect or governance breach is known in the checked
+  records. Limited retrospective coverage cannot establish comprehensive absence.
+- **Tokens:** INCONCLUSIVE. Every task's total tokens remain `UNAVAILABLE`;
+  tool counts and instruction bytes cannot establish the 10% token threshold.
+- **Time/rework:** INCONCLUSIVE for active time; every task remains
+  `UNAVAILABLE`, so the 20% improvement cannot be assessed. Recorded rework is
+  zero in both arms of all three pairs, so no pair shows a reduction of one
+  cycle, and the required improvement in at least two pairs is not demonstrated.
+- **Builder notes/context:** the treatment notes describe useful feedback and
+  source discovery. They do not supply missing measurements. Pair 3 retained
+  16,931 always-loaded instruction bytes and used four authoritative sources;
+  this is a context-load observation, not a measured token or efficiency win.
+
+The adoption criteria are not met. Retain the diagnosis/context-hygiene notes
+as optional observations only; infer no causal quality, time, or token benefit.
+No further pilot work is planned: do not reconstruct usage, restart observation,
+or install/vendor a practice based on this result. Delivery and completion evidence belong in #136; the independently completed
+#58 follow-up stays separate.
 
 ## Created task backlog
 
@@ -182,7 +238,8 @@ For every completed task, append this compact note below the ledger:
 - Verification: targeted regression (2 passed); `PYTHONPATH=src python3 -m
   pytest tests/test_us002_virtual_replay_harness.py -q` passed; `PYTHONPATH=src
   python3 -m pytest -q` passed; `git diff --check` passed.
-- 14-day quality outcome: not yet observable.
+- 14-day quality outcome: none known in the limited retrospective GitHub review
+  recorded in the closeout above.
 - Builder decision: baseline complete. The narrow regression test established
   the cardinality contract without adding logging or changing safety-sensitive
   behavior.
@@ -210,7 +267,8 @@ For every completed task, append this compact note below the ledger:
   preserved 1 Hz after rejection; `PYTHONPATH=src python3 -m pytest
   tests/test_us002_virtual_replay_harness.py -q` passed; `PYTHONPATH=src
   python3 -m pytest -q` passed; `git diff --check` passed.
-- 14-day quality outcome: not yet observable.
+- 14-day quality outcome: none known in the limited retrospective GitHub review
+  recorded in the closeout above.
 - Builder decision: keep the diagnosis treatment for hard bugs. It forced a
   testable failure before changing state, without adding agents, logging, or
   user round-trips in this task.
@@ -236,7 +294,8 @@ For every completed task, append this compact note below the ledger:
 - Verification: targeted source-only import regression (1 passed); focused
   US-002/debug/EV replay suite passed; `PYTHONPATH=src python3 -m pytest -q`
   passed; `git diff --check` passed.
-- 14-day quality outcome: not yet observable.
+- 14-day quality outcome: none known in the limited retrospective GitHub review
+  recorded in the closeout above.
 - Builder decision: baseline complete. The repair keeps the test package as a
   compatibility shim while making the source package independently importable.
 
@@ -264,7 +323,8 @@ For every completed task, append this compact note below the ledger:
   decode check passed; `PYTHONPATH=src python3 -m pytest
   tests/test_us002_virtual_replay_harness.py -q` passed; `PYTHONPATH=src
   python3 -m pytest -q` passed; `git diff --check` passed.
-- 14-day quality outcome: not yet observable.
+- 14-day quality outcome: none known in the limited retrospective GitHub review
+  recorded in the closeout above.
 - Builder decision: keep the diagnosis treatment for parsing defects. The
   failing representation matrix ruled out an unnecessary replay/schema change
   before implementation.
@@ -285,7 +345,9 @@ For every completed task, append this compact note below the ledger:
 - Verification: `source "$HOME/.nvm/nvm.sh" && nvm use && npm run build`
   passed with Node 24; static root-relative route scan found none; `git diff
   --check` passed.
-- 14-day quality outcome: not yet observable.
+- 14-day quality outcome: none known in the limited retrospective GitHub review
+  recorded in the closeout above; later residual README omissions were resolved
+  separately by PR #165 under #58.
 - Builder decision: baseline complete. The existing docs E2E suite already
   covers rendered internal links; the scoped README correction required no
   additional runtime or dependency change.
@@ -311,7 +373,8 @@ For every completed task, append this compact note below the ledger:
 - Verification: Astro reports Node `>=22.12.0`; `.nvmrc` pins 24; the guide
   uses `nvm install` and `nvm use`; `source "$HOME/.nvm/nvm.sh" && nvm use &&
   npm run build` passed with Node 24; `git diff --check` passed.
-- 14-day quality outcome: not yet observable.
+- 14-day quality outcome: none known in the limited retrospective GitHub review
+  recorded in the closeout above.
 - Builder decision: keep the context-hygiene preflight for docs/tooling work.
   It located the authoritative version source before editing and avoided
   duplicating a vague, stale version claim.
