@@ -6,6 +6,7 @@
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
+    "test:specs": "node --test tests/spec-publication.test.mjs",
     "preview": "astro preview",
     "test:smoke": "playwright test --config playwright.smoke.config.ts",
     "test:e2e": "playwright test --config playwright.e2e.config.ts",

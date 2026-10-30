@@ -15,6 +15,8 @@ US-006 implements:
 - EV replay harness and dirty-data injection
 - JSON-LD safety checks for EV validation and security events
 
+Protocol labels and schema-valid values do not establish standards certification, battery safety, or remaining-life prediction. The adapter guardrails describe software policy; they do not provide live EV capture or automatic transport discovery. The separate ICE live harness is repository-only and excluded from wheel and sdist distributions.
+
 US-006 does not implement EV anomaly scoring. EV-HDF, EV-OSF, time-of-use, V2X discharge tracking, certified energy consumption, and automatic DoCAN-to-DoIP discovery are deferred to future stories.
 
 ## Protocols
@@ -33,7 +35,7 @@ The ICE schema remains separate and accepts only `SAE_J1979` and `SAE_J1979-2`. 
 | --- | --- | --- | --- | --- | --- |
 | `battery_soh` | percent | number | `0.0` to `100.0` | yes | Battery state of health. |
 | `battery_soce` | percent | number | `0.0` to `100.0` | yes | ZEVonUDS State of Certified Energy, not driver-facing State of Charge. |
-| `battery_temp_avg` | Celsius | number | `-40.0` to `80.0` | yes | Physics-based EV pack thermal guardrail. |
+| `battery_temp_avg` | Celsius | number | `-40.0` to `80.0` | yes | AutoPulse input-policy temperature bound; not a battery safety threshold. |
 | `traction_motor_speed` | RPM | integer | `-20000` to `20000` | no | Negative values require documented source sign convention. |
 | `battery_throughput` | Ah | number | `0.0` to `500000.0` | no | Cumulative lifetime throughput; not net or signed throughput. |
 | `grid_energy_in` | kWh | number | `0.0` to `1000000.0` | no | Lifetime charging-energy ceiling. |

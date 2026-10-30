@@ -97,7 +97,7 @@ US-001 accepts only passive diagnostic data from SAE J1979 Mode 01 or SAE J1979-
 | `0x06` | `stft_bank1` | SAE J1979 Mode 01 | `(A / 128 - 1) * 100` percent | `-50.0` to `50.0` |
 | `0x07` | `ltft_bank1` | SAE J1979 Mode 01 | `(A / 128 - 1) * 100` percent | `-50.0` to `50.0` |
 
-The schema limits are physical guardrails, not simply protocol maxima. For example, SAE J1979 can encode RPM above passenger-engine operating reality, but AutoPulse rejects values above `9500.0` rpm because they represent parser error, sensor fault, or dirty replay input for the supported vehicle class.
+The schema limits are AutoPulse input-policy bounds. For example, values above `9500.0` rpm are rejected by this contract. These limits do not establish a universal engine operating envelope, identify a physical fault, or certify vehicle safety.
 
 ## Optional Read-Only PIDs
 
@@ -164,15 +164,15 @@ Frames are rejected when they:
 
 Zero values are explicitly valid for `engine_rpm`, `vehicle_speed`, and `engine_load` to support key-on, engine-off telemetry.
 
-## Research Claims
+## Evidence and Design Scope
 
-The US-001 PID selection is based on the AutoPulse core research claims tracked as APC-CORE-01 and APC-CORE-02:
+The six required PIDs are a repository data-contract choice. Earlier APC-CORE-01
+and APC-CORE-02 accuracy percentages are not substantiated as AutoPulse results
+and are not retained as performance claims. PID availability and valid schema
+values alone do not establish diagnostic accuracy.
 
-| Claim | Finding | US-001 implication |
-| --- | --- | --- |
-| APC-CORE-01 | The core engine telemetry set supports 98% engine fault detection accuracy in the linked research baseline. | RPM, speed, coolant temperature, and calculated load are mandatory in every frame. |
-| APC-CORE-02 | Short-term and long-term fuel trim analysis supports 92% fuel system detection accuracy in the linked research baseline. | `stft_bank1` and `ltft_bank1` are first-class required fields, not optional enrichment. |
-
-These findings are treated as design inputs for the data contract. Downstream detection quality depends on the ingestion layer preserving complete, validated, read-only PID coverage for each frame.
-
-The associated research source is tracked in the AutoPulse research database as "Analyzing the Effectiveness" (`https://ijarasem.com/admin/img/22_Analyzing%20the%20Effectiveness.pdf`).
+The current ICE analysis uses fixed heuristics and in-memory rolling statistics;
+learned healthy-baseline training and persistence and calibrated prediction are
+not implemented. Validation and synthetic regression tests establish software
+behavior for supplied inputs, not vehicle fault-detection performance. See the
+[public evidence review](https://github.com/ajason13/autopulse/blob/main/grubby-galaxy/src/content/docs/reference/empirical-validation.md).
