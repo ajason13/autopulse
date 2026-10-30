@@ -149,7 +149,7 @@ passes schema validation before dispatch.
 
 Pass `packet.to_schema_dict()` to `PdMProcessor.process_frame()` to supply the
 canonical protocol and optional ambient value. Missing ambient temperature
-disarms HDF under the [ICE scoring policy](./ice-scoring-policy.md); replay
+disarms HDF under the [ICE scoring policy](https://github.com/ajason13/autopulse/blob/main/docs/specs/ice-scoring-policy.md); replay
 does not invent a value. This is offline normalization only and adds no live
 PID polling or new vehicle-validation claim.
 

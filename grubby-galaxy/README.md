@@ -80,6 +80,21 @@ includes the tested versions, results, and a bounded local recovery procedure.
 
 ## Key Documentation
 
+The canonical public US-001, US-002, US-004, and US-006 specifications live in
+`../docs/specs/`. Edit those files first, then copy each changed file unchanged
+to `src/content/docs/specs/` with the same filename. Commit both copies together.
+Keep frontmatter in the canonical file and use links that work both on GitHub
+and on the published site. The original US-006 implementation design is retained
+in `../docs/research/us-006-original-design.md`; it is historical research,
+not a second public specification.
+
+Astro checks byte equality for all four specifications during configuration,
+including direct Astro builds, `npm run build`, dev startup, Pages builds, and
+the browser suites' programmatic builds. Missing or stale copies fail with the
+filename before publication. To verify an edit, run `npm run build` followed by
+`npm run test:e2e` for route, navigation, and internal-link checks. No generation
+step rewrites source files automatically.
+
 The specifications are available at the following local routes (when the dev server is running):
 
 - [/autopulse/specs/us-001-engine-data-contract/](/autopulse/specs/us-001-engine-data-contract/)
