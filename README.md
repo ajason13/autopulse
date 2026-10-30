@@ -1,10 +1,20 @@
 # AutoPulse
 
-An educational, read-only OBD-II anomaly detection framework that learns a vehicle's healthy fingerprint and flags data drift before DTCs appear.
+An educational, offline-first framework for validating and replaying read-only OBD-II telemetry and exploring experimental ICE anomaly scores.
+
+The current analysis uses fixed heuristics and in-memory rolling statistics. Learned
+healthy-baseline training and persistence, calibrated failure prediction, and
+warning lead time before DTCs are not implemented or established by vehicle
+benchmarks. See the [validation evidence and limitations](grubby-galaxy/src/content/docs/reference/empirical-validation.md).
+
+EV support covers validation, routing, replay, adapter guardrails, and event
+serialization; it does not include EV anomaly scoring or live EV capture. The
+ICE stationary live harness is repository-only: `autopulse.live` is excluded
+from wheel and sdist distributions. See the [offline package boundary](docs/offline-package.md).
 
 ## Project Vitals
 
-- Mission: Detect statistical drift in read-only OBD-II telemetry before diagnostic trouble codes appear.
+- Mission: Explore statistical changes in read-only telemetry using reproducible offline inputs.
 - Governance: See [AGENTS.md](AGENTS.md) for current repository constraints and verification.
 - Codex sessions: [Start, continue, and troubleshoot](docs/codex-sessions.md).
 - Primary domains: OBD-II ingestion, virtual replay, statistical anomaly scoring, and adversarial validation.

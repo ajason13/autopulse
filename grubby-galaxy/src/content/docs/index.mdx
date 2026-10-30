@@ -2,7 +2,7 @@
 title: AutoPulse
 description: Educational, read-only OBD-II anomaly detection framework using statistical drift.
 hero:
-  tagline: Predictive vehicle maintenance using statistical drift detection. Read-only. Educational. Secure.
+  tagline: Offline telemetry validation, replay, and experimental ICE anomaly scoring.
   image:
     file: ../../assets/houston.webp
   actions:
@@ -19,20 +19,22 @@ import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 ## The AutoPulse Mission
 
-AutoPulse is an educational framework designed to detect statistical anomalies in vehicle telemetry before they trigger a Diagnostic Trouble Code (DTC). We focus on high-fidelity, read-only data analysis.
+AutoPulse is an educational, offline-first framework for validating and replaying read-only telemetry. ICE analysis uses fixed heuristics and in-memory rolling statistics. Learned healthy-baseline training and persistence and calibrated failure prediction are not implemented. Vehicle diagnostic accuracy and warning lead time before DTCs have not been established.
+
+Read the [validation evidence and limitations](reference/empirical-validation/) before interpreting scores. EV support is limited to validation, routing, replay, adapter guardrails, and event serialization; it includes no EV anomaly scoring or live capture.
 
 <CardGrid stagger>
-	<Card title="Read-Only & Secure" icon="approve-check">
-		Strictly analytical interaction. We prioritize system integrity with zero ECU write commands and mandatory VIN hashing.
+	<Card title="Read-Only Scope" icon="approve-check">
+		Offline inputs use hashed vehicle identifiers. Write, actuation, and ECU configuration behavior is outside the project scope.
 	</Card>
 	<Card title="Statistical PdM" icon="random">
-		Identify **Heat Dissipation (HDF)** and **Overstrain (OSF)** failures using real-world AI4I 2020 dataset patterns.
+		Explore **HDF** and **OSF** experimental branches. Their labels and scores do not establish vehicle faults or failure likelihood.
 	</Card>
 	<Card title="Temporal Precision" icon="list-format">
-		Deterministic 60-second sliding windows with Z-score and IQR analysis optimized for edge deployment.
+		Rolling statistics use 60 samples by default. OSF separately tracks exposure over 60 seconds; sampling cadence changes the statistics window duration.
 	</Card>
-	<Card title="Multi-Agent Governance" icon="document">
-		Built using an agentic SDLC (Codex/Claude) ensuring architecture, audit, and implementation alignment.
+	<Card title="Codex Review" icon="document">
+		One Codex session owns a focused change. Risk-sensitive changes receive a fresh-context Codex review under current repository instructions.
 	</Card>
 </CardGrid>
 
@@ -46,12 +48,12 @@ AutoPulse is an educational framework designed to detect statistical anomalies i
         />
         <LinkCard
                 title="US-002: Replay Harness"
-                description="Simulate real-world failures with virtual logs."
+                description="Exercise ingestion with synthetic replay inputs."
                 href="specs/us-002-virtual-replay-harness/"
         />
         <LinkCard
                 title="US-003: PdM Algorithms"
-                description="Deep dive into HDF, OSF, and sigmoid models."
+                description="Experimental scores, eligibility, and rolling statistics."
                 href="reference/anomaly-detection/"
         />
         <LinkCard
@@ -66,7 +68,7 @@ AutoPulse is an educational framework designed to detect statistical anomalies i
         />
         <LinkCard
                 title="Stationary Smoke Test"
-                description="Run the approved read-only first vehicle check."
+                description="Repository-only ICE harness and operator prerequisites."
                 href="guides/stationary-smoke-test/"
         />
         <LinkCard

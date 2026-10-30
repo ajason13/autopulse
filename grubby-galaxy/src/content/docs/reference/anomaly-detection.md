@@ -1,236 +1,122 @@
 ---
 title: Anomaly Detection Reference
-description: Technical reference for the US-003 predictive maintenance algorithms, alert outputs, and rolling-window statistics.
+description: Experimental ICE scores, eligibility, exposure windows, and alert semantics.
 ---
 
-US-003 implements AutoPulse's predictive maintenance analysis layer under `src/autopulse/analysis/`. The processor consumes validated US-001 engine frames, maintains rolling temporal state, and emits `PdMAlert` objects for downstream UI, reporting, and audit workflows.
+`PdMProcessor` consumes validated ICE frames and emits `PdMAlert` objects. It is
+computational: it opens no vehicle connection or transport. Callers must validate
+complete frames against US-001 before analysis; processor sensor/time guards do
+not replace the schema validator.
 
-The implementation is intentionally computational only. It does not open CAN, serial, socket, or OBD connections, and it does not issue diagnostic commands. All vehicle interaction remains read-only.
+Analysis uses fixed heuristics and in-memory rolling statistics. Learned
+healthy-baseline training and persistence and calibrated prediction are not
+implemented. The legacy `failure_probability` field is an experimental score in
+`[0, 1]`, not measured failure likelihood. A zero score does not establish vehicle
+health; one does not establish certain failure. See [evidence and limitations](../empirical-validation/).
 
-## Implementation Map
+## Implementation and Contracts
 
-| Component | File | Responsibility |
+| Component | Repository path | Responsibility |
 | --- | --- | --- |
-| `PdMProcessor` | `src/autopulse/analysis/pdm_processor.py` | Orchestrates frame validation, rolling buffers, detector evaluation, and alert selection. |
-| `PdMAlert` | `src/autopulse/analysis/pdm_processor.py` | Public alert payload for anomaly status, probability, primary PID, rolling-window summary, and source frame. |
-| `HDFDetector` | `src/autopulse/analysis/hdf_detector.py` | Heat Dissipation Failure probability and thermal rate guard. |
-| `OSFDetector` | `src/autopulse/analysis/osf_detector.py` | Overstrain Failure stress accumulation, classification, and probability. |
-| `CircularBuffer` | `src/autopulse/analysis/circular_buffer.py` | Fixed-size rolling storage for the 60-second analysis window. |
-| Statistical helpers | `src/autopulse/analysis/utils.py` | Shared constants, sigmoid, Z-score, and IQR bounds. |
+| `PdMProcessor`, `PdMAlert` | `src/autopulse/analysis/pdm_processor.py` | Time/sensor guards, session state, filters, statistics, and alert selection. |
+| `HDFDetector` | `src/autopulse/analysis/hdf_detector.py` | Eligibility-aware synthetic thermal scoring and rate guard. |
+| `OSFDetector` | `src/autopulse/analysis/osf_detector.py` | Finite-horizon low-RPM/high-load exposure. |
+| `CircularBuffer` | `src/autopulse/analysis/circular_buffer.py` | Fixed sample-count storage. |
 
-## Alert Contract
+The [ICE scoring policy](https://github.com/ajason13/autopulse/blob/main/docs/specs/ice-scoring-policy.md),
+[processor time contract](https://github.com/ajason13/autopulse/blob/main/docs/specs/processor-time-contract.md),
+and [ICE alert export contract](https://github.com/ajason13/autopulse/blob/main/docs/specs/ice-alert-export-contract.md)
+provide detailed rules, compatibility changes, and synthetic acceptance vectors.
+These are software policies, not vehicle-calibrated physical limits.
 
-`PdMAlert` is the output surface exposed by the processor:
+## Processing and Session State
+
+1. Parse time to Unix milliseconds; reject invalid or non-increasing timestamps before mutation.
+2. Check required analysis PIDs and finite numeric inputs. Sensor rejection leaves accepted state unchanged.
+3. For continuous sessions, reject coolant changes above the software guard of 5 °C/s before updating state.
+4. Seed a first frame, or reset the complete session for a gap greater than 60 seconds. Such frames accrue zero HDF/OSF contribution. Exactly 60 seconds remains continuous.
+5. Store accepted raw RPM, coolant, and load samples; compute smoothing and rolling statistics.
+6. Evaluate HDF eligibility and OSF exposure, then select the alert. A statistical outlier contributes when neither HDF nor OSF score exceeds 0.5.
+
+Explicit `reset()` clears buffers, coolant/time history, HDF arming, and OSF
+exposure. State is not persisted between runs. Replaying from the start requires
+a reset or new processor. Legacy naive ISO timestamps mean UTC; numeric
+processor timestamps are Unix milliseconds. Full input representation rules
+are in the time contract above.
+
+## HDF Eligibility and Score
+
+Raw RPM zero or absent ambient temperature disarms HDF and yields zero HDF
+contribution. Otherwise, while unarmed, both raw and smoothed coolant-to-ambient
+deltas must reach at least 15 K to arm the next accepted frame. The arming frame
+itself contributes zero. This synthetic latch is not a measured engine-warm flag.
+
+For already-eligible inputs, the retained equation returns 1.0 when smoothed
+delta is strictly below 8.6 K and smoothed RPM is strictly below 1,380.
+Otherwise it uses the sigmoid product capped at 0.99. Those thresholds originated
+in an industrial synthetic label rule; they do not establish vehicle cooling
+failure. Use `HDFDetector.update()` for eligibility-aware behavior;
+`compute_probability()` alone is only the legacy pure equation.
+
+## OSF Exposure and Score
+
+OSF holds the previous accepted smoothed sample's indicator over each observed
+interval. Exposure is active only for `0 < rpm < 1500` and `load_pct > 80`.
+The interval ledger clips exposure to the most recent 60 seconds:
 
 ```python
-@dataclass
-class PdMAlert:
-    timestamp: int
-    vin_hashed: str
-    failure_probability: float
-    failure_type: FailureType
-    is_anomaly: bool
-    primary_pid: int | None = None
-    window_summary: WindowSummary | None = None
-    obd_frame: dict[str, Any] | None = None
+score = exposure_seconds / 60.0
 ```
 
-`vin_hashed` must be a lowercase 64-character SHA-256 digest. Raw VINs are rejected before alert creation.
+First samples seed the held indicator without inventing elapsed time. Raw RPM
+zero resets OSF immediately even if smoothing still carries prior RPM. Session
+reset clears the ledger. The legacy `vehicle_class` values L/M/H all use this
+same policy; they do not represent calibrated vehicle classes. Lifetime stress
+accumulation, torque/RPM products, and class-specific hard limits are not the
+current algorithm.
 
-Supported `failure_type` values are:
+## Smoothing and Statistics
 
-| Value | Meaning |
+The trailing three-point median feeds EWMA with alpha 0.3 for RPM/load and 0.1
+for coolant. These fixed software coefficients can suppress isolated spikes and
+delay transitions; they have no vehicle calibration. Raw signals also gate HDF
+eligibility and engine-off handling.
+
+Raw per-channel buffers hold 60 samples by default. Cadence changes their time
+span; this sample window is separate from OSF's 60-second exposure ledger. Window
+summaries contain min, max, mean, sample standard deviation, Z-score, and IQR
+fences. An absolute Z-score above 3 or a value outside the IQR fences can select
+`STATISTICAL_ANOMALY` with a fixed score of 0.85. That constant is a software alert
+level, not an accuracy percentage or inferred vehicle-failure probability.
+
+## Alert Interpretation
+
+`PdMAlert` includes timestamp, hashed vehicle identifier, score, failure type,
+anomaly flag, optional primary PID, window summary, and source frame. The
+[export contract](https://github.com/ajason13/autopulse/blob/main/docs/specs/ice-alert-export-contract.md)
+retains sanitized summaries and excludes the raw source frame from serialization.
+
+| Label | Software meaning |
 | --- | --- |
-| `NONE` | No active anomaly over the current frame and rolling window. |
-| `HDF` | Heat Dissipation Failure branch is the dominant signal. |
-| `OSF_ANOMALY` | Overstrain Failure branch crossed the warning threshold but not the hard limit. |
-| `OSF` | Overstrain Failure branch reached the class-specific hard limit. |
-| `STATISTICAL_ANOMALY` | Rolling-window Z-score or IQR gate detected a monitored PID outlier. |
-| `SENSOR_ERROR` | Required PID missing or coolant rate-of-change guard failed. |
+| `NONE` | No selected score above 0.5; does not establish health. |
+| `HDF` | Eligible HDF branch selected above 0.5. |
+| `OSF_ANOMALY` | Selected exposure fraction above 0.5 and below 1.0. |
+| `OSF` | Selected exposure fraction reaches 1.0. |
+| `STATISTICAL_ANOMALY` | Raw rolling statistics selected an outlier. |
+| `SENSOR_ERROR` | Required analysis input or coolant rate guard rejected a frame; anomaly flag is false. |
 
-## Processing Sequence
+## Verification Scope
 
-For each frame, `PdMProcessor.process_frame()` performs the following sequence:
+`tests/test_us003_pdm_algorithms.py` and `tests/test_us004_smoothing.py` exercise
+production classes with synthetic inputs. Run them from an installed development
+environment as described in [Getting Started](../../guides/getting-started/):
 
-1. Parse the timestamp into Unix milliseconds.
-2. Validate mandatory analysis PIDs: `engine_rpm`, `engine_load`, and `coolant_temp`.
-3. Compute elapsed seconds from the previous accepted frame, defaulting to 1 second for the first frame.
-4. Run the coolant thermal rate guard before updating rolling buffers.
-5. Push accepted RPM, coolant, and load values into 60-sample circular buffers.
-6. Generate rolling-window statistics and evaluate statistical anomaly gates.
-7. Evaluate HDF when optional `ambient_temp` is present.
-8. Accumulate OSF stress using the current frame.
-9. Select the highest-priority alert branch and return `PdMAlert`.
-
-Sensor-error frames do not enter the rolling buffers. This prevents physically impossible coolant jumps from corrupting future statistical baselines.
-
-## Heat Dissipation Failure
-
-HDF models insufficient heat rejection using coolant-to-ambient delta and RPM. The critical trigger is a strict conjunction:
-
-```python
-if delta_t < 8.6 and rpm < 1_380:
-    return 1.0
+```sh
+./.venv/bin/python -m pytest tests/test_us003_pdm_algorithms.py tests/test_us004_smoothing.py -q
 ```
 
-Where:
-
-| Term | Source | Meaning |
-| --- | --- | --- |
-| `delta_t` | `coolant_temp - ambient_temp` | Cooling delta in degrees Celsius; deltas are scale-invariant with Kelvin. |
-| `8.6` | `HDF_DELTA_T_THRESHOLD_K` | AI4I-derived critical delta threshold. |
-| `1_380` | `HDF_RPM_THRESHOLD` | AI4I-derived low-RPM threshold. |
-
-When the hard HDF trigger is not met, the detector computes an early-warning probability:
-
-```python
-p_dt = sigmoid(15.0 - delta_t, 0.0, k_dt=0.8)
-p_rpm = sigmoid(1_380.0 - rpm, 0.0, k_rpm=0.003)
-probability = min(0.99, p_dt * p_rpm)
-```
-
-`ambient_temp` is optional in US-001. Frames without `ambient_temp` skip HDF evaluation and remain eligible for OSF and statistical anomaly detection.
-
-## Thermal Rate Guard
-
-Coolant temperature is guarded by a physics-derived maximum rate of change:
-
-```python
-rate = abs(curr_temp - prev_temp) / elapsed_seconds
-return rate > 5.0
-```
-
-If the rate exceeds 5 degrees Celsius per second, the processor returns:
-
-```python
-failure_type = "SENSOR_ERROR"
-primary_pid = 0x05
-```
-
-The guard fails closed. Invalid elapsed-time inputs return `SENSOR_ERROR` rather than silently bypassing validation.
-
-## Overstrain Failure
-
-OSF models mechanical stress as accumulated workload over time:
-
-```python
-wf = load_pct * rpm
-gamma = exp(0.3) if rpm < 1_500 and load_pct > 80.0 else 1.0
-stress_increment = wf * gamma * elapsed_seconds
-```
-
-The processor adds the current frame's increment before classifying the alert, so a frame that crosses the OSF threshold is reported immediately.
-
-Class-specific hard limits are:
-
-| Vehicle class | `S_limit` |
-| --- | ---: |
-| `L` | `11_000.0` |
-| `M` | `12_000.0` |
-| `H` | `13_000.0` |
-
-Classification:
-
-| Condition | Result |
-| --- | --- |
-| `S_idx >= S_limit` | `OSF` |
-| `S_idx >= 0.8 * S_limit` | `OSF_ANOMALY` |
-| otherwise | `NONE` |
-
-The OSF probability is a sigmoid anchored at the anomaly lower bound:
-
-```python
-anomaly_lo = 0.8 * S_limit
-probability = sigmoid(S_idx, anomaly_lo, k=0.001)
-```
-
-## Windowed Analysis (Smoothing)
-
-To prevent "alert flicker" caused by high-frequency sensor noise, US-004 implements a hybrid smoothing pipeline. This ensures that probabilities generated by the HDF and OSF detectors are stable over time.
-
-### The Smoothing Pipeline
-
-AutoPulse uses a two-stage stabilization process for core OBD-II telemetry (RPM, Load, and Coolant Temp):
-
-1.  **3-Point Median Filter**: A non-linear filter that removes extreme single-frame spikes (outliers) without introducing the phase shift or "lag" typical of moving averages.
-2.  **EWMA (Exponentially Weighted Moving Average)**: A linear filter that provide signal stabilization based on physical inertia.
-
-The pipeline is implemented in `PdMProcessor._smooth_current_values()`.
-
-### Tuning Parameters
-
-| Channel | Filter Type | Parameter | Intent |
-| --- | --- | --- | --- |
-| RPM / Load | EWMA | $\alpha = 0.3$ | Balanced responsiveness for dynamic engine load. |
-| Coolant Temp | EWMA | $\alpha = 0.1$ | High damping to reflect actual thermal inertia. |
-
-### Architectural Separation
-
-A critical requirement of US-004 is the separation of smoothed and raw signals:
-
--   **Smoothed Signal**: Fed exclusively into the `HDFDetector` and `OSFDetector` to compute stable failure probabilities.
--   **Raw Signal**: Retained in the primary `CircularBuffer` instances for `STATISTICAL_ANOMALY` detection. This ensures that while probabilities are smoothed, the system remains reactive to instantaneous statistical outliers (Z-score/IQR).
-
-## Rolling Window Statistics
-
-The processor maintains three `CircularBuffer` instances:
-
-| Buffer | PID | Field |
-| --- | --- | --- |
-| RPM | `0x0C` | `engine_rpm` |
-| Coolant temperature | `0x05` | `coolant_temp` |
-| Engine load | `0x04` | `engine_load` |
-
-The default capacity is 60 samples. At 1Hz polling, this represents a 60-second analysis window. `push()` is O(1): it appends until capacity, then overwrites the oldest value using `_head % capacity`.
-
-Each window summary exposes:
-
-| Metric | Meaning |
-| --- | --- |
-| `min` | Minimum value in the current rolling window. |
-| `max` | Maximum value in the current rolling window. |
-| `avg` | Arithmetic mean. |
-| `std_dev` | Sample standard deviation. |
-| `z_score` | Z-score of the latest accepted value. |
-| `iqr_low` | Lower IQR fence: `Q1 - 1.5 * IQR`. |
-| `iqr_high` | Upper IQR fence: `Q3 + 1.5 * IQR`. |
-| `is_statistical_outlier` | `true` when the latest value is outside the IQR fences. |
-
-The statistical anomaly gate promotes the alert when any monitored PID satisfies either condition:
-
-```python
-abs(z_score) > 3.0
-is_statistical_outlier is True
-```
-
-When no HDF or OSF branch has a stronger probability, this emits:
-
-```python
-failure_type = "STATISTICAL_ANOMALY"
-failure_probability = 0.85
-primary_pid = 0x0C | 0x05 | 0x04
-```
-
-## Verification
-
-US-003 is covered by `tests/test_us003_pdm_algorithms.py`, including:
-
-- HDF strict-boundary behavior.
-- OSF class thresholds and lugging penalty.
-- Thermal rate guard behavior.
-- 60-sample circular buffer ordering and overwrite behavior.
-- Z-score and IQR window summary exposure.
-- Statistical anomaly promotion.
-- VIN hash enforcement and read-only computational boundaries.
-
-Current release verification:
-
-```bash
-python3 -m pytest -q
-```
-
-Expected result:
-
-```text
-284 passed
-```
+Use the guide's native executable path in PowerShell. Passing these tests verifies
+the software rules for supplied fixtures. It does not measure automotive
+accuracy, validate warning lead time, train a model, or authorize vehicle use.
+EV support remains validation/routing/replay/event serialization without anomaly
+scoring; see [US-006](../../specs/us-006-ev-telemetry-data-contract/).
