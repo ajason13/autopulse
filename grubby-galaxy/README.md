@@ -20,7 +20,7 @@ npm install
 npm run dev
 ```
 
-The site will be available at [http://localhost:4321](http://localhost:4321).
+The site will be available at [http://localhost:4321/autopulse/](http://localhost:4321/autopulse/).
 
 The project currently pins Node via `.nvmrc` to the active LTS/current version used by CI-compatible local builds. If `npm install` fails with `EACCES` under `~/.npm`, the local npm cache contains files owned by another user. Avoid changing project dependencies to work around that; either repair the cache ownership outside the repo or run one install with a temporary cache:
 
@@ -126,7 +126,7 @@ Inside this folder, you'll see:
 | Command                   | Action                                           |
 | :------------------------ | :----------------------------------------------- |
 | `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
+| `npm run dev`             | Starts local dev server at `localhost:4321/autopulse/` |
 | `npm run build`           | Build your production site to `./dist/`          |
 | `npm run preview`         | Preview your build locally, before deploying     |
 | `npm run test:smoke`      | Run Starlight homepage smoke checks              |
