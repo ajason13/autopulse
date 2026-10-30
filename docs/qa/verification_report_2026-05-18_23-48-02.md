@@ -1,4 +1,8 @@
 # Auditor-Ready Verification Report
+
+> Historical snapshot from retired tooling; this is not current verification
+> or security approval. See [maintained verification](verification-tooling.md).
+
 **Timestamp:** 2026-05-18_23-48-02
 **Active Story:** Unknown Story
 
