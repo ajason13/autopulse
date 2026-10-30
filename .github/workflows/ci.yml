@@ -45,6 +45,8 @@ jobs:
           python -m pip download --only-binary=:all: --dest .ci-wheelhouse -r .ci-requirements.txt
           python scripts/build_release_artifacts.py --output .ci-dist-a --source-date-epoch 0
           python scripts/build_release_artifacts.py --output .ci-dist-b --source-date-epoch 0
+          python scripts/packaging_policy.py compare .ci-dist-a/autopulse-0.1.0-py3-none-any.whl .ci-dist-b/autopulse-0.1.0-py3-none-any.whl
+          python scripts/packaging_policy.py compare .ci-dist-a/autopulse-0.1.0.tar.gz .ci-dist-b/autopulse-0.1.0.tar.gz
           python scripts/verify_release_cell.py --wheel .ci-dist-a/autopulse-0.1.0-py3-none-any.whl --sdist .ci-dist-a/autopulse-0.1.0.tar.gz --wheelhouse .ci-wheelhouse --locked-requirements .ci-requirements.txt --summary .ci-summary.md --manifest-output .ci-wheelhouse.json
           python -m pip install .
           python scripts/generate_supply_chain_evidence.py --target-python python --wheel .ci-dist-a/autopulse-0.1.0-py3-none-any.whl --wheelhouse-manifest .ci-wheelhouse.json --locked-requirements .ci-requirements.txt --commit ${{ github.sha }} --output .ci-evidence --package autopulse --package jsonschema
@@ -61,6 +63,8 @@ jobs:
           python -m pip download --only-binary=:all: --dest .ci-wheelhouse -r .ci-requirements.txt
           python scripts/build_release_artifacts.py --output .ci-dist-a --source-date-epoch 0
           python scripts/build_release_artifacts.py --output .ci-dist-b --source-date-epoch 0
+          python scripts/packaging_policy.py compare .ci-dist-a/autopulse-0.1.0-py3-none-any.whl .ci-dist-b/autopulse-0.1.0-py3-none-any.whl
+          python scripts/packaging_policy.py compare .ci-dist-a/autopulse-0.1.0.tar.gz .ci-dist-b/autopulse-0.1.0.tar.gz
           python scripts/verify_release_cell.py --wheel .ci-dist-a/autopulse-0.1.0-py3-none-any.whl --sdist .ci-dist-a/autopulse-0.1.0.tar.gz --wheelhouse .ci-wheelhouse --locked-requirements .ci-requirements.txt --summary .ci-summary.md --manifest-output .ci-wheelhouse.json
           python -m pip install .
           python scripts/generate_supply_chain_evidence.py --target-python python --wheel .ci-dist-a/autopulse-0.1.0-py3-none-any.whl --wheelhouse-manifest .ci-wheelhouse.json --locked-requirements .ci-requirements.txt --commit ${{ github.sha }} --output .ci-evidence --package autopulse --package jsonschema
