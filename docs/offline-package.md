@@ -14,6 +14,19 @@ replay evidence passes. CPython 3.12 and older, PyPy, prereleases,
 free-threaded Python, containers, and other operating systems are outside this
 profile.
 
+## Build reproducibility gate
+
+Each CI release cell builds a wheel and sdist twice with the same
+`SOURCE_DATE_EPOCH`. Before installation verification, both corresponding
+artifacts must pass `scripts/packaging_policy.py compare`; a missing artifact
+or changed payload fails the cell on Unix and Windows.
+
+The contract is canonical archive payload equality: the validated, normalized
+member paths and SHA-256 hashes of their uncompressed contents must match.
+Archive metadata, compression, and member ordering are not compared. This gate
+does not establish whole-archive byte equality or equality across different
+platform cells.
+
 ## Disconnected installation
 
 Use only the wheelhouse and hashed requirements export produced for the exact
