@@ -1,47 +1,74 @@
 ---
 title: Empirical Validation Report
-description: Normalization logic and physics-based guardrails for AutoPulse Epics 1 & 2.
+description: Repository verification evidence and limits of AutoPulse experimental telemetry analysis.
 ---
 
-# 📊 Empirical Validation Report: Epics 1 & 2
+AutoPulse has software validation and synthetic regression coverage. It has no
+repository benchmark establishing vehicle fault-detection accuracy, warning lead
+time before DTCs, calibrated failure prediction, or automotive compliance.
+Passing a schema or software test does not certify vehicle or battery safety.
 
-## 1. AI4I 2020 Dataset Mapping & Normalization
+## Implemented Behavior and Evidence
 
-To ensure high-fidelity replay within the `VirtualReplayHarness` (US-002), the following mappings have been validated against the AI4I 2020 dataset and US-001 requirements:
+| Surface | Repository evidence | What it establishes |
+| --- | --- | --- |
+| ICE data contract | `schemas/engine_obd_frame.schema.json`, `tests/test_engine_data_contract.py` | Acceptance/rejection of supplied frames under AutoPulse input policy. |
+| ICE analysis | `src/autopulse/analysis/`, `tests/test_us003_pdm_algorithms.py`, `tests/test_us004_smoothing.py`, `tests/test_hdf_eligibility_policy.py`, `tests/test_osf_exposure_policy.py`, `tests/test_pdm_temporal_contract.py` | Deterministic synthetic score, eligibility, exposure, reset, and smoothing behavior. |
+| EV pipeline | `tests/test_us006_*.py` | Schema validation, routing isolation, adapter policy, replay, and event serialization for supplied inputs. |
+| Package boundary | `pyproject.toml`, `tests/packaging/test_package_contract.py` | Offline package inventory, including exclusion of `autopulse.live`. |
 
-* **Temperature Normalization**: The conversion from 'Process Temperature [K]' to 'Coolant Temp [C]' follows the standard thermodynamic formula:
-  $$T_{(°C)} = T_{(K)} - 273.15$$
+These paths refer to the [source repository](https://github.com/ajason13/autopulse).
+Consult the tests and CI for the tested commit and environment; this page makes
+no fixed test-count or cross-platform performance claim.
 
-* **Validation**: This ensures that typical AI4I process temperatures (~300K–315K) map to standard operating coolant ranges (27°C–42°C), while failure modes correctly trigger US-001 high-temp flags.
+The current ICE implementation uses fixed heuristics and in-memory rolling
+statistics. Learned vehicle-specific healthy-baseline training and persistence
+are not implemented. The legacy `failure_probability` field is a bounded
+experimental score; `HDF` and `OSF` identify software branches, not confirmed
+vehicle failures. Zero does not establish health and one does not establish
+certain failure. See the [analysis reference](../anomaly-detection/).
 
-* **Engine Load Mapping**: Given the AI4I machine's nominal torque limit of 100 Nm, **Engine Load (%)** is mapped 1:1 from **Torque [Nm]**.
-* **Formula**: $\text{Load} [\%] = (\text{Torque} [\text{Nm}] / 100) \times 100$.
+EV support is limited to validation, routing, replay, adapter guardrails, and
+event serialization. EV anomaly scoring, remaining-life prediction, and live EV
+capture are not implemented. Accepted protocol identifiers do not establish
+standards certification or transport compatibility with a particular vehicle.
 
-* **OSF Threshold Soundness**: The **Overstrain Failure (OSF)** threshold $(\text{Torque} \times \text{RPM} > 11,000)$ serves as a real-time proxy for **Mechanical Workload Stress**.
-* **Statistical Soundness**: Substitution of **RPM** identifies scenarios where high cylinder pressure (Torque) meets high reciprocating speed (RPM), which are the primary drivers of bearing fatigue and connecting rod failure.
+## External Research and Mapping Limits
 
-## 2. Adversarial Edge Case Justification
+The [UCI AI4I 2020 dataset documentation](https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset)
+(DOI: [10.24432/C5HS5C](https://doi.org/10.24432/C5HS5C), checked 2026-10-29)
+describes synthetic industrial-machine data, including process/air temperatures,
+torque, tool wear, and rotational speed. Its label rules supplied historical
+inspiration for AutoPulse's HDF/OSF experiments; they are not an automotive
+validation dataset. No model is trained on those rows by the current analysis.
 
-The physics-based limits implemented in the US-001 validator are designed for **Early Anomaly Detection**, providing a tighter security perimeter than standard OBD-II protocol maximums.
+Kelvin-to-Celsius conversion preserves temperature differences but does not
+establish equivalence between industrial process temperature and engine coolant.
+OBD calculated load is not measured torque or tool wear. The old torque-to-load
+mapping and RPM-product stress rationale do not substantiate bearing fatigue,
+connecting-rod failure, or vehicle damage claims. The current OSF branch instead
+tracks recent low-RPM/high-load exposure under a synthetic software policy.
 
-| Test Case | Physics-Based Limit | Protocol Max | Justification for Physics-Based Limit |
-| --- | --- | --- | --- |
-| **TC-BND-01** | **> 9,500 RPM** | 16,383 RPM | 9,500 RPM exceeds the valvetrain stability (valve float) of 99% of production passenger engines. |
-| **TC-BND-02** | **> 140°C** | 215°C | 140°C is the critical thermal failure point where pressurized 50/50 coolant boils. |
+The [ICE scoring policy](https://github.com/ajason13/autopulse/blob/main/docs/specs/ice-scoring-policy.md)
+records the source comparison, units, synthetic acceptance vectors, and dated
+observations. It establishes no calibrated physical-risk model.
 
-## 3. EV Telemetry Contract: SAE J1979-3 (ZEVonUDS)
+## Input Bounds and Compliance Limits
 
-US-006 establishes AutoPulse's first read-only electric-vehicle telemetry contract using the **ZEVonUDS** direction:
+US-001's 9,500 RPM ceiling and 140 °C coolant ceiling are repository input-policy
+bounds. They do not establish universal valvetrain limits, coolant boiling points,
+or failure thresholds across vehicles. The same distinction applies to EV
+input bounds. Unsupported numerical accuracy and population-coverage assertions
+have been removed; no automotive compliance verdict is asserted here.
 
-* **Battery State of Health (SOH)**: Mandatory for quantitative assessment of residual battery life.
-* **State of Certified Energy (SOCE)**: EV energy metric validated separately from driver-facing State of Charge.
-* **High-Voltage Battery Temperature**: Replaces Engine Coolant Temp as the primary thermal safety signal.
-* **Traction Motor Rotational Speed**: Replaces Engine RPM for drivetrain monitoring where adapter source documentation defines the sign convention.
+## Live and Future Scope
 
-US-006 remains limited to schema validation, routing isolation, adapter safety guardrails, replay coverage, and JSON-LD serialization safety. EV-HDF, EV-OSF, time-of-use, V2X discharge tracking, certified energy consumption, and automatic DoCAN-to-DoIP discovery are deferred to future stories.
+The bounded ICE stationary smoke harness is available only in the repository;
+`autopulse.live` is excluded from wheel and sdist distributions. Its operator
+checklist and separate authorization still apply. Offline verification and
+historical reviews do not authorize a vehicle connection.
 
----
-
-**Status**: ✅ Verified Compliant
-**Approver**: Lead Researcher & Architect (Gemini, historical); current architecture owner is Codex.
-**Date**: May 2026.
+Learned/persisted vehicle baselines and calibrated prediction remain future work
+requiring a separate design, suitable data, and evaluation. They are not features
+of the current package. Historical research and audit records retain their dated
+provenance; they do not expand the current evidence above.

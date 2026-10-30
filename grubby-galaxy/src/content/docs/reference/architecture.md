@@ -1,51 +1,77 @@
 ---
 title: Architecture Overview
-description: High-level architectural design of the AutoPulse OBD-II anomaly detection framework.
+description: Implemented offline telemetry pipeline, experimental ICE analysis, and repository review rules.
 ---
 
-AutoPulse is designed as a modular, read-only analysis pipeline optimized for edge deployment. It separates data ingestion from temporal state management and failure inference.
+AutoPulse separates offline ingestion and schema validation from in-memory ICE
+analysis and event serialization. The current implementation uses fixed
+heuristics and rolling statistics. Learned healthy-baseline training and
+persistence and calibrated vehicle-failure prediction are not implemented.
 
 ## System Diagram
 
 ```mermaid
 graph TD
-    A[OBD-II Data Source / Virtual Log] --> B[Data Ingestion Layer]
-    L[Stationary Live Smoke Harness] --> B
+    A[Offline JSONL / CSV Replay] --> B[Data Ingestion Layer]
     B --> C{Validation & Security}
-    C -- Validated Frame --> D[Temporal Analysis Layer]
-    C -- Security Violation --> E[Drop & Log]
-    D --> F[Circular Buffers - 60s]
-    F --> G[PdM Inference Engine]
-    G --> H[PdM Alert Output]
-    
-    subgraph "PdM Inference"
-    G1[HDF Detector]
-    G2[OSF Detector]
-    G3[Statistical Anomaly Gate]
-    end
+    C -- Valid ICE Frame --> D[Temporal Analysis Layer]
+    C -- Rejected Input --> E[Drop & Log]
+    C -- Valid EV Frame --> V[EV Validation Events - No Scoring]
+    D --> F[Rolling Statistics - 60 Samples]
+    F --> G[Experimental ICE Scoring]
+    G --> H[Alert Serialization]
+    V --> H
 ```
 
 ## Core Layers
 
-### 1. Data Ingestion & Validation
-Defined in the [US-001 Data Contract](../../specs/us-001-engine-data-contract/), this layer ensures that incoming sensor data satisfies physical constraints (e.g., RPM < 9,500) and security mandates (e.g., VIN hashing). It normalizes raw automotive signals into a consistent JSON format.
+### Data Ingestion and Validation
 
-The [Stationary Smoke Test](../../guides/stationary-smoke-test/) is the only approved live-vehicle path. It is ICE-only, bounded, read-only, and requires a precomputed `vin_hashed`; it does not read VIN or perform active diagnostics.
+The [US-001 Data Contract](../../specs/us-001-engine-data-contract/) defines ICE
+input-policy ranges and hashed identifiers. [US-006](../../specs/us-006-ev-telemetry-data-contract/)
+uses a separate EV schema and routing path. Accepted ranges and protocol labels
+do not establish automotive compliance or physical safety.
 
-### 2. Temporal Analysis (Stateful)
-Because a single OBD frame lacks context, AutoPulse maintains a **60-second sliding window** using high-performance circular buffers. This layer computes rolling statistics (min, max, mean, std_dev) used for drift detection.
+EV support covers validation, routing, adapter guardrails, replay, and event
+serialization. It includes no EV anomaly scoring or live EV capture.
 
-### 3. PdM Inference (Algorithms)
-The [US-003 Algorithms](../anomaly-detection/) evaluate the temporal state against known vehicle failure modes:
-- **HDF**: Uses thermal delta and RPM conjunctions.
-- **OSF**: Accumulates workload factor stress with lugging penalties.
-- **Statistical**: Monitors Z-score and IQR for unexpected drift in healthy sensors.
+The [Stationary Smoke Test](../../guides/stationary-smoke-test/) describes a
+separate bounded ICE harness with operator prerequisites. It is repository-only:
+`autopulse.live` is excluded from wheel and sdist distributions. Passing offline
+tests or reading that guide does not authorize a vehicle connection.
 
-## Multi-Agent SDLC Governance
+### Temporal Analysis
 
-AutoPulse is governed by a 2026 Multi-LLM engineering model. Each layer of the architecture is owned by a specialized agent:
+The processor retains 60 accepted samples per monitored channel by default.
+Sampling cadence determines the duration represented by those statistics; the
+buffers are not time-evicted. Three-point median and EWMA filters smooth detector
+inputs, while raw samples supply Z-score and IQR checks. Filters can delay
+transitions and do not train a healthy-vehicle baseline.
 
-- **Lead Architect & Developer (Codex)**: Defines specifications, research, mathematical thresholds, implementation, performance optimization, and repository hygiene.
-- **Lead Auditor (Claude)**: Manages adversarial QA, edge-case generation, and final safety sign-off.
+Timestamp order is strict. A gap greater than 60 seconds starts a new session;
+first frames seed state with zero HDF/OSF contribution. Explicit reset clears
+session state. See the [processor time contract](https://github.com/ajason13/autopulse/blob/main/docs/specs/processor-time-contract.md).
 
-This separation of concerns ensures that no feature is implemented without architectural alignment and rigorous adversarial verification.
+### Experimental ICE Scores
+
+The [analysis reference](../anomaly-detection/) describes:
+
+- HDF's observed arming sequence and temperature/RPM equation for eligible inputs.
+- OSF's low-RPM/high-load exposure fraction over a separate 60-second horizon.
+- Rolling statistical outlier and sensor-error branches.
+
+The legacy `failure_probability` field carries an experimental score. Branch
+labels do not confirm vehicle faults, and scores do not establish failure
+likelihood or maintenance recommendations. See [evidence and limitations](../empirical-validation/).
+
+## Current Development and Review Rules
+
+Applicable global and [repository AGENTS.md instructions](https://github.com/ajason13/autopulse/blob/main/AGENTS.md)
+govern current work. One Codex session owns one focused behavior change per PR;
+GitHub Issues track criteria, verification, and delivery. Risk-sensitive changes
+require a fresh-context Codex review supplied with acceptance criteria, the final
+diff, and verification evidence; material findings must be resolved before handoff.
+
+External-model and Notion workflows are used only when explicitly requested.
+Historical multi-model audit records preserve provenance and past verdicts;
+they do not impose current mandatory review gates or certify product safety.
