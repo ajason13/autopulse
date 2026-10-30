@@ -1,6 +1,8 @@
 from pathlib import Path
 import re
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 CI = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -63,6 +65,43 @@ def test_ci_release_gate_contract_is_fail_closed() -> None:
     assert setup_python_step is not None
     assert "pip-install:" not in setup_python_step.group("body")
     assert "not Windows 11 desktop validation" in CI
+
+
+@pytest.mark.parametrize("shell", ["bash", "pwsh"])
+def test_release_cells_compare_both_builds_before_installation(shell: str) -> None:
+    job = _extract_job(CI, "release-gates")
+    steps = [
+        step for step in _extract_step_blocks(job)
+        if f"if: matrix.shell == '{shell}'" in step
+        and "scripts/build_release_artifacts.py" in step
+    ]
+    assert len(steps) == 1
+    step = steps[0]
+    assert f"shell: {shell}\n" in step
+    assert "continue-on-error:" not in job
+    lines = step.split("        run: |\n", 1)[1].splitlines()
+    commands = [line.strip() for line in lines if line.strip()]
+    required = [
+        "python scripts/build_release_artifacts.py --output .ci-dist-a --source-date-epoch 0",
+        "python scripts/build_release_artifacts.py --output .ci-dist-b --source-date-epoch 0",
+        "python scripts/packaging_policy.py compare .ci-dist-a/autopulse-0.1.0-py3-none-any.whl .ci-dist-b/autopulse-0.1.0-py3-none-any.whl",
+        "python scripts/packaging_policy.py compare .ci-dist-a/autopulse-0.1.0.tar.gz .ci-dist-b/autopulse-0.1.0.tar.gz",
+    ]
+    start = commands.index(required[0])
+    # Standalone consecutive commands reject comments, conditionals, success
+    # overrides, self-comparisons, and an unused second build.
+    assert commands[start:start + len(required)] == required
+    assert commands[start + len(required)].startswith(
+        "python scripts/verify_release_cell.py "
+    )
+    if shell == "pwsh":
+        assert commands[:2] == [
+            "$ErrorActionPreference = 'Stop'",
+            "$PSNativeCommandUseErrorActionPreference = $true",
+        ]
+        assert all(not command.startswith("$") for command in commands[2:])
+    else:
+        assert all(command.startswith("python ") for command in commands)
 
 
 def test_docs_workflows_pin_actions_and_verify_committed_base_path() -> None:

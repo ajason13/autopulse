@@ -6,6 +6,7 @@ on:
     branches: [main]
     # Only run if files in the docs directory change
     paths:
+      - 'docs/specs/**'
       - 'grubby-galaxy/**'
       - '.github/workflows/deploy-docs.yml'
 

@@ -27,6 +27,10 @@ separate from disconnected installation.
 
 ## Verification
 
+The legacy generated-report/scanner workflow has been retired. See
+[maintained verification commands](docs/qa/verification-tooling.md) for the
+replacement checks and the limits of historical reports.
+
 Before requesting review, run the relevant test gates:
 
 ```bash

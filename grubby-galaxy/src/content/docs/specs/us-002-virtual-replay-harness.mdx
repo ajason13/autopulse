@@ -5,7 +5,7 @@ description: Deterministic offline replay harness for validating AutoPulse inges
 
 US-002 defines the offline replay harness used to exercise AutoPulse without a physical vehicle or live CAN interface. The harness normalizes source datasets into US-001 frames, enforces the read-only security policy, and replays frames at deterministic sampling rates for ingestion, anomaly, and regression testing.
 
-The implementation lives in `tests/simulation/virtual_replay.py`.
+The production implementation lives in `src/autopulse/virtual_replay.py`; `tests/simulation/virtual_replay.py` provides compatibility imports for tests.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ The harness does not bypass US-001. Every replayed frame is normalized and valid
 
 CANdid-style rows are treated as decoded OBD-II observations when they expose a `pid` and payload bytes. The `CandidParser` maps each supported PID into the canonical US-001 field.
 
-The CANdid research claim identifies the dataset as high-fidelity CAN bus traces from 10 real-world production vehicles. In US-002, it provides replay validation coverage for signal jitter, protocol variance, and real automotive noise profiles.
+The repository tests supply synthetic PID/payload rows to exercise decoding and rejection boundaries. The parser name and fixtures do not establish validation against a real-vehicle dataset or measured automotive noise profiles.
 
 | CANdid PID | US-001 field | Decode rule |
 | --- | --- | --- |
@@ -41,9 +41,9 @@ Fuel-trim byte extremes are intentionally left unclamped. If a CANdid payload de
 
 ### AI4I 2020
 
-AI4I 2020 is industrial predictive-maintenance telemetry rather than native OBD-II data. AutoPulse maps it into the US-001 engine frame for deterministic simulation and PdM algorithm testing.
+AI4I 2020 describes synthetic industrial-machine data rather than native OBD-II telemetry. AutoPulse maps matching column names into the US-001 frame shape for deterministic software tests.
 
-The AI4I 2020 research claim identifies the dataset as 10,000 labeled predictive-maintenance samples. Its temperature, torque, and rotational-speed features provide a controlled proxy for thermal and mechanical stress scenarios.
+These mappings produce synthetic OBD-shaped test inputs; they do not model vehicle thermal or mechanical stress. Process temperature is not established as engine coolant, and the torque-to-load mapping does not supply measured OBD load or tool wear. See the [evidence review](https://github.com/ajason13/autopulse/blob/main/grubby-galaxy/src/content/docs/reference/empirical-validation.md) for the primary dataset source and scope.
 
 | AI4I column | US-001 field | Mapping rule |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ The AI4I 2020 research claim identifies the dataset as 10,000 labeled predictive
 | Not present | `stft_bank1` | Defaulted to `0.0`. |
 | Not present | `ltft_bank1` | Defaulted to `0.0`. |
 
-This mapping lets AI4I failure modes exercise the same validation and timing machinery as OBD-II traces while preserving US-001 boundaries.
+The mapped inputs exercise validation and scheduling logic under US-001 bounds. Industrial failure labels do not establish vehicle-failure detection or predictive accuracy.
 
 ## Mock Interface
 
@@ -126,6 +126,33 @@ Replay-facing protocol aliases are supported for harness ergonomics:
 | `J1979_MODE01` | `SAE_J1979` |
 | `J1979_2_SERVICE22` | `SAE_J1979-2` |
 
+### Optional ambient temperature and packet compatibility
+
+Production replay lives in `autopulse.virtual_replay`. Compatibility imports
+from `autopulse.adapters` (`MockAdapter`, `DataPacket`), `autopulse.providers`
+(`JSONLProvider`, `CSVProvider`), and `autopulse.replayer` (`LogReplayer`) refer
+to those same implementations.
+
+`MockAdapter` preserves supplied `ambient_temp` in degrees Celsius through
+`DataPacket.ambient_temp`, `to_dict()`, and `to_schema_dict()`. The existing
+US-001 range is inclusive −40 to 80 °C; null, booleans, non-finite numbers,
+invalid types, and out-of-range values are rejected. JSONL requires a numeric
+value; CSV converts numeric text just as it does for the core PIDs. An empty
+CSV cell is invalid; omit the column when ambient temperature is unavailable.
+
+`DataPacket` accepts `ambient_temp` as an optional keyword argument, defaulting
+to `None`; both serializers omit the key for that default. The existing
+positional constructor, including its tenth `_raw` snapshot argument, is
+preserved. Explicit null in a source row is rejected rather than treated as
+absence. Direct packet construction remains a data container; adapter output
+passes schema validation before dispatch.
+
+Pass `packet.to_schema_dict()` to `PdMProcessor.process_frame()` to supply the
+canonical protocol and optional ambient value. Missing ambient temperature
+disarms HDF under the [ICE scoring policy](https://github.com/ajason13/autopulse/blob/main/docs/specs/ice-scoring-policy.md); replay
+does not invent a value. This is offline normalization only and adds no live
+PID polling or new vehicle-validation claim.
+
 ## Timing Engine
 
 `LogReplayer` drives a connected `MockAdapter` on a background thread at a deterministic cadence. It collects frames, replay errors, and dispatch timestamps so tests can assert both data correctness and timing behavior.
@@ -174,7 +201,7 @@ The supported synchronization modes are:
 | `1Hz` | `1.0` second per frame | Baseline OBD-II polling, cold start gradients, and slow thermal behavior. |
 | `10Hz` | `0.1` second per frame | High-resolution replay for jitter, parser boundary cases, and temporal anomaly checks. |
 
-The replayer validates that injected drift remains below the selected frame interval. Tests assert timing accuracy within a 5% tolerance for both `1Hz` and `10Hz` replay.
+The replayer validates that injected drift remains below the selected frame interval. `tests/test_us002_virtual_replay_harness.py` asserts intervals within a 5% tolerance at `1Hz` and `10Hz` using an injected test clock. This checks scheduling logic for synthetic replay; it does not establish host wall-clock accuracy or vehicle polling performance.
 
 ## Dirty Replay Strategy
 

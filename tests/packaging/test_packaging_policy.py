@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 import shutil
 import stat
+import subprocess
+import sys
 import tarfile
 import zipfile
 
@@ -220,3 +222,46 @@ def test_reproducibility_compare_detects_payload_change(tmp_path: Path) -> None:
     second.write_text('{"bomFormat":"CycloneDX","components":[{}]}\n', encoding="utf-8")
     with pytest.raises(PolicyError, match="Reproducibility"):
         compare_reproducible(first, second)
+
+
+@pytest.mark.parametrize("suffix", [".whl", ".tar.gz"])
+def test_archive_compare_cli_checks_payload_and_missing_counterpart(
+    tmp_path: Path, suffix: str,
+) -> None:
+    first = tmp_path / ("first" + suffix)
+    second = tmp_path / ("second" + suffix)
+
+    def write_archive(path: Path, data: bytes, timestamp: int) -> None:
+        if suffix == ".whl":
+            with zipfile.ZipFile(path, "w") as archive:
+                info = zipfile.ZipInfo("autopulse/__init__.py")
+                info.comment = str(timestamp).encode()
+                archive.writestr(info, data)
+        else:
+            with tarfile.open(path, "w:gz") as archive:
+                info = tarfile.TarInfo("autopulse-0.1.0/src/autopulse/__init__.py")
+                info.size = len(data)
+                info.mtime = timestamp
+                archive.addfile(info, io.BytesIO(data))
+
+    def compare() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(REPOSITORY / "scripts/packaging_policy.py"),
+             "compare", str(first), str(second)],
+            capture_output=True, text=True, check=False,
+        )
+
+    write_archive(first, b"VALUE = 1\n", 0)
+    write_archive(second, b"VALUE = 1\n", 1)
+    assert first.read_bytes() != second.read_bytes()
+    assert compare().returncode == 0
+
+    write_archive(second, b"VALUE = 2\n", 1)
+    changed = compare()
+    assert changed.returncode == 1
+    assert "Reproducibility comparison failed" in changed.stderr
+
+    second.unlink()
+    missing = compare()
+    assert missing.returncode == 1
+    assert "packaging policy failed" in missing.stderr

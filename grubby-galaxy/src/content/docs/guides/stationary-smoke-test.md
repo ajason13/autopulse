@@ -1,6 +1,6 @@
 ---
 title: Stationary Smoke Test
-description: Run the first read-only AutoPulse vehicle check with the approved safety checklist.
+description: Repository-only ICE smoke harness scope and operator prerequisites.
 ---
 
 The stationary smoke harness is AutoPulse's narrow bridge from replay-only validation to a first real-vehicle check. It is ICE-only, read-only, bounded, and designed for a parked vehicle under direct operator supervision.
@@ -9,9 +9,14 @@ The stationary smoke harness is AutoPulse's narrow bridge from replay-only valid
 Road testing, unattended operation, EV DID capture, ambient temperature PID `0x46`, VIN reads, DTC clearing, UDS writes, routines, security access, and session escalation are out of scope.
 :::
 
+`autopulse.live` is excluded from wheel and sdist distributions. These commands
+require a source checkout and separate operator authorization; this guide and
+passing offline tests do not authorize a vehicle connection or establish vehicle
+safety or diagnostic accuracy. EV live capture is outside this harness.
+
 ## Preconditions
 
-- Claude re-review passed for the smoke harness implementation.
+- Follow current [repository instructions](https://github.com/ajason13/autopulse/blob/main/AGENTS.md), including fresh-context Codex review for safety-sensitive changes. Historical reviews do not replace current operator prerequisites.
 - Vehicle is parked, stationary, and not on a public road.
 - Parking brake is engaged.
 - Operator is present and supervising.

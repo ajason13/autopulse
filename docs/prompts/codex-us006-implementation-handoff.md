@@ -6,7 +6,7 @@ Implement US-006 only after reading:
 
 - `AGENTS.md`
 - `CONTEXT.md`
-- `docs/specs/us-006-ev-telemetry-data-contract.md`
+- `docs/research/us-006-original-design.md` (historical implementation design)
 - `docs/prompts/claude-adversarial-planning-us006-ev-integration.md`
 
 Claude has given a conditional pass for implementation after the four final corrections are incorporated. This prompt is the implementation handoff.
