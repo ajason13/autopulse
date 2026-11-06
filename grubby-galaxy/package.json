@@ -6,6 +6,8 @@
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
+    "validate:docs": "node scripts/validate-docs.mjs",
+    "test:provenance": "node --test tests/docs-provenance.test.mjs",
     "test:specs": "node --test tests/spec-publication.test.mjs",
     "preview": "astro preview",
     "test:smoke": "playwright test --config playwright.smoke.config.ts",

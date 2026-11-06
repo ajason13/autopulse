@@ -3,11 +3,11 @@ import { defineConfig } from 'astro/config';
 import mermaid from 'astro-mermaid';
 import starlight from '@astrojs/starlight';
 import { checkSpecs } from './scripts/check-specs.mjs';
+import { productionConfig } from './scripts/docs-provenance.mjs';
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://ajason13.github.io',
-	base: '/autopulse/',
+	...productionConfig,
 	integrations: [
 		{
 			name: 'autopulse-spec-publication',

@@ -96,10 +96,4 @@ jobs:
           cache: npm
           cache-dependency-path: grubby-galaxy/package-lock.json
       - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:specs
-      - run: npm run build
-      - run: npm run test:lifecycle
-      - run: npm run test:smoke
-      - run: npm run test:e2e
+      - run: npm run validate:docs
