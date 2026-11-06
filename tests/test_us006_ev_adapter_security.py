@@ -55,6 +55,57 @@ def test_sec_011_tester_present_rate_limited():
     assert exc.value.code == "TESTER_PRESENT_RATE_LIMIT"
 
 
+@pytest.mark.parametrize(
+    "now",
+    [float("nan"), float("inf"), -float("inf"), True, False,
+     "12", "private-clock-marker", [], {}, 10**400],
+    ids=["nan", "inf", "negative-inf", "true", "false", "numeric-string",
+         "text", "list", "dict", "overflow"],
+)
+@pytest.mark.parametrize("previous", [None, 10.0])
+def test_tester_present_invalid_clock_preserves_last_accepted_time(now, previous):
+    guard = UDSCommandGuard()
+    if previous is not None:
+        guard.validate("0x3E", now=previous)
+
+    with pytest.raises(ValueError, match=r"^TesterPresent time must be a finite number\.$"):
+        guard.validate("0x3E", now=now)
+    assert guard.last_tester_present_at == previous
+    assert guard.events == []
+
+    if previous is not None:
+        with pytest.raises(CommandBlockedException) as exc:
+            guard.validate("0x3E", now=10.1)
+        assert exc.value.code == "TESTER_PRESENT_RATE_LIMIT"
+        assert guard.last_tester_present_at == previous
+    guard.validate("0x3E", now=14.0)
+    assert guard.last_tester_present_at == 14.0
+
+
+def test_tester_present_backward_clock_and_exact_boundary():
+    guard = UDSCommandGuard()
+    guard.validate("0x3E", now=-4)
+    with pytest.raises(CommandBlockedException) as exc:
+        guard.validate("0x3E", now=-5)
+    assert exc.value.code == "TESTER_PRESENT_RATE_LIMIT"
+    assert guard.last_tester_present_at == -4
+    guard.validate("0x3E", now=0)
+    assert guard.last_tester_present_at == 0
+
+
+def test_tester_present_default_clock_is_validated(monkeypatch):
+    monkeypatch.setattr("autopulse.data.validator.time.monotonic", lambda: float("nan"))
+    guard = UDSCommandGuard()
+    with pytest.raises(ValueError, match="finite number"):
+        guard.validate("0x3E")
+    assert guard.last_tester_present_at is None
+    monkeypatch.setattr("autopulse.data.validator.time.monotonic", lambda: 0.0)
+    guard.validate("0x3E")
+    monkeypatch.setattr("autopulse.data.validator.time.monotonic", lambda: 4.0)
+    guard.validate("0x3E")
+    assert guard.last_tester_present_at == 4.0
+
+
 def test_sec_012_tester_present_blocked_outside_default_session():
     guard = UDSCommandGuard()
     guard.current_session = 0x03

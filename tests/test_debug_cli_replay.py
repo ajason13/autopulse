@@ -140,6 +140,34 @@ def test_replay_ev_security_events_distinguish_red_line_and_rate_limit(tmp_path,
     assert_no_raw_vin(captured.out)
 
 
+@pytest.mark.parametrize(
+    "invalid_clock",
+    [math.nan, math.inf, -math.inf, True, "12", "private-clock-marker", [], {}, 10**400],
+    ids=["nan", "inf", "negative-inf", "boolean", "numeric-string",
+         "text", "list", "dict", "overflow"],
+)
+def test_replay_ev_invalid_clock_preserves_rate_limit_and_safe_output(
+    tmp_path, capsys, caplog, invalid_clock,
+):
+    path = write_jsonl(tmp_path, [
+        ev_row(__service_id__="0x3E", __now__=10.0),
+        ev_row(__service_id__="0x3E", __now__=invalid_clock),
+        ev_row(__service_id__="0x3E", __now__=10.1),
+        ev_row(__service_id__="0x3E", __now__=14.0),
+    ])
+    with caplog.at_level(logging.WARNING, logger="autopulse"):
+        assert debug_main(["--verbose", "replay-ev", "--jsonl", str(path)]) == 0
+    summary, captured = parsed_stdout(capsys)
+    assert summary["total_rows"] == 4
+    assert summary["accepted_frames"] == 2
+    assert summary["rejected_frames"] == 1
+    assert summary["security_violations"] == 0
+    assert summary["guard_events"] == ["TESTER_PRESENT_RATE_LIMIT"]
+    assert "ValueError" in caplog.text
+    for unsafe in ("NaN", "Infinity", "private-clock-marker", RAW_VIN):
+        assert unsafe not in captured.out + captured.err + caplog.text
+
+
 def test_replay_ice_robust_loop_tallies_out_of_bounds_rpm(tmp_path, capsys):
     path = write_jsonl(
         tmp_path,
