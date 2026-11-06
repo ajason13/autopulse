@@ -339,7 +339,15 @@ class UDSCommandGuard:
         if self.current_session != _DEFAULT_SESSION:
             self._block("SECURITY_VIOLATION_RED_LINE", 0x3E, None)
 
-        current_time = time.monotonic() if now is None else float(now)
+        supplied_time = time.monotonic() if now is None else now
+        if isinstance(supplied_time, bool) or not isinstance(supplied_time, (int, float)):
+            raise ValueError("TesterPresent time must be a finite number.")
+        try:
+            current_time = float(supplied_time)
+        except OverflowError:
+            raise ValueError("TesterPresent time must be a finite number.") from None
+        if not math.isfinite(current_time):
+            raise ValueError("TesterPresent time must be a finite number.")
         if (
             self.last_tester_present_at is not None
             and current_time - self.last_tester_present_at
