@@ -34,7 +34,7 @@ dev = [
 release = [
   "build==1.6.1",
   "check-wheel-contents==0.6.3",
-  "cyclonedx-bom==7.5.0",
+  "cyclonedx-bom==7.6.0",
   "pip-audit==2.10.1",
   "pip-licenses==5.5.5",
   "twine==7.0.0",
