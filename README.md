@@ -74,13 +74,8 @@ Do not add raw VINs, raw diagnostic payload bytes, seed-key material, tokens, or
 
 AutoPulse uses a Starlight-based documentation site for specifications and guides.
 
-To run the docs locally:
-
-```sh
-cd grubby-galaxy
-nvm use
-npm install
-npm run dev
-```
-
-See [grubby-galaxy/README.md](grubby-galaxy/README.md) for full setup and build details.
+Use **Node.js 24** (pinned in `grubby-galaxy/.nvmrc`) and the npm lockfile.
+Follow the [docs setup guide](grubby-galaxy/README.md#local-development) for
+native Windows PowerShell or macOS/Linux commands, build/preview, and Chromium
+verification. The local site is served at
+[http://localhost:4321/autopulse/](http://localhost:4321/autopulse/).

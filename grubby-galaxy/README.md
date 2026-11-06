@@ -4,31 +4,100 @@ This directory contains the source code for the AutoPulse documentation site, bu
 
 ## Local Development
 
-To run the documentation site locally, follow these steps:
+Use **Node.js 24**, the major pinned in `.nvmrc` and used by CI, with its bundled
+npm. Use `npm ci` to install `package-lock.json` without updating dependencies.
+Run commands from `grubby-galaxy`, the directory containing `package.json`.
+Python is only needed for Python development; follow
+[Getting Started](src/content/docs/guides/getting-started.md) for that setup.
+
+### Windows PowerShell (x64)
+
+Install the **24.x Windows x64** distribution from the
+[official Node.js download page](https://nodejs.org/en/download), selecting
+version 24 explicitly. The installer can add Node and npm to PATH; reopen
+PowerShell afterward. Alternatively, extract the official Windows x64 ZIP into
+a user-writable directory and add that directory to the current shell's PATH:
+
+```powershell
+# ZIP alternative only: replace with the folder containing node.exe and npm.cmd.
+$env:Path = "C:\Tools\node-v24.x-win-x64;$env:Path"
+```
+
+No Unix version manager, WSL, or Git Bash is needed. Use `npm.cmd` and `npx.cmd`
+so PowerShell does not select their `.ps1` wrappers; no execution-policy change
+is required. Run each command only after the preceding command succeeds;
+`$LASTEXITCODE` should be `0` after native executable commands.
+
+From a writable parent directory (or use an existing checkout):
+
+```powershell
+git clone https://github.com/ajason13/autopulse.git "AutoPulse Development"
+Set-Location "AutoPulse Development\grubby-galaxy"
+Get-Content .nvmrc
+node --version
+npm.cmd --version
+npm.cmd ci
+npm.cmd run dev
+```
+
+Confirm `.nvmrc` says `24` and `node --version` starts with `v24.`; record the
+actual npm version. Open [http://localhost:4321/autopulse/](http://localhost:4321/autopulse/).
+Stop dev with Ctrl+C before preview or browser tests. The remaining Windows commands are:
+
+```powershell
+npm.cmd run build
+npm.cmd run preview
+# Open http://localhost:4321/autopulse/ and stop preview with Ctrl+C.
+npx.cmd playwright install chromium
+npm.cmd run test:smoke
+npm.cmd run test:e2e
+```
+
+If npm reports a cache access error, retry the failed install with a temporary
+Windows cache; keep the lockfile and dependency versions:
+
+```powershell
+$docsNpmCache = Join-Path ([System.IO.Path]::GetTempPath()) 'autopulse-docs-npm-cache'
+npm.cmd ci --cache "$docsNpmCache"
+```
+
+Windows 11 is the preferred native development environment. For Windows 10,
+[Microsoft's lifecycle record](https://learn.microsoft.com/en-us/lifecycle/products/windows-10-home-and-pro)
+ends Home/Pro support on October 14, 2025. The
+[Node 24 platform policy](https://github.com/nodejs/node/blob/v24.x/BUILDING.md#platform-list)
+lists Windows x64 starting at Windows 10/Server 2016 but excludes vendor-EOL
+platforms regardless of the table. Check the exact Windows edition and servicing
+status before interpreting compatibility results as upstream support.
+Windows 10 docs compatibility is unverified until its native checks are recorded;
+a successful build alone does not change that support policy.
+See the [native verification record](../docs/qa/windows-docs-onboarding.md)
+for executed cells and remaining work. Docs development evidence does not grant
+AutoPulse desktop release support; that decision remains in
+[#141](https://github.com/ajason13/autopulse/issues/141).
+
+### macOS / Linux
+
+With Unix `nvm` installed, start from the repository root:
 
 ```sh
-# Navigate to the docs directory
 cd grubby-galaxy
-
-# Initialize nvm (if not already in your shell)
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-# Use the project Node version and start development
+nvm install
 nvm use
-npm install
+node --version
+npm --version
+npm ci
 npm run dev
 ```
 
-The site will be available at [http://localhost:4321/autopulse/](http://localhost:4321/autopulse/).
-
-The project currently pins Node via `.nvmrc` to the active LTS/current version used by CI-compatible local builds. If `npm install` fails with `EACCES` under `~/.npm`, the local npm cache contains files owned by another user. Avoid changing project dependencies to work around that; either repair the cache ownership outside the repo or run one install with a temporary cache:
+Open [http://localhost:4321/autopulse/](http://localhost:4321/autopulse/) and stop
+with Ctrl+C. If npm reports an `EACCES` cache error, use a user-writable temporary
+cache without modifying dependencies:
 
 ```sh
-npm install --cache /private/tmp/autopulse-npm-cache
+npm ci --cache "$(mktemp -d)"
 ```
-
-For peer-resolution errors from npm 11 against otherwise compatible Astro/Starlight packages, prefer a targeted `--legacy-peer-deps` install over `--force`.
 
 ## Build and Preview
 
@@ -44,9 +113,10 @@ The configured production base path is `/autopulse/`, so preview URLs are served
 
 ## Smoke Tests
 
-Run the Starlight homepage smoke suite with:
+Install Chromium once after `npm ci`, then run the Starlight homepage smoke suite:
 
 ```sh
+npx playwright install chromium
 npm run test:smoke
 ```
 
@@ -59,7 +129,16 @@ AUTOPULSE_DOCS_PORT=4322 npm run test:smoke
 AUTOPULSE_DOCS_PORT=4322 npm run test:e2e
 ```
 
-In PowerShell, set `$env:AUTOPULSE_DOCS_PORT = '4322'` before running the npm commands. Run the suites sequentially within a checkout because each rebuilds `dist/`. The test server uses Astro's programmatic build/preview API so agent-triggered CLI backgrounding and preview lock files cannot detach it from Playwright.
+In PowerShell, use:
+
+```powershell
+$env:AUTOPULSE_DOCS_PORT = '4322'
+npm.cmd run test:smoke
+npm.cmd run test:e2e
+Remove-Item Env:AUTOPULSE_DOCS_PORT
+```
+
+Run the suites sequentially within a checkout because each rebuilds `dist/`. The test server uses Astro's programmatic build/preview API so agent-triggered CLI backgrounding and preview lock files cannot detach it from Playwright.
 
 `npm run test:lifecycle` exercises stale HTTP 200/404 servers, rebuilding stale output, and port cleanup after a passing and deliberately failing request probe. Run it after `npm run build` and separately from the browser suites; CI runs it before smoke/e2e.
 
@@ -125,7 +204,7 @@ Inside this folder, you'll see:
 
 | Command                   | Action                                           |
 | :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
+| `npm ci`                  | Installs locked dependencies                            |
 | `npm run dev`             | Starts local dev server at `localhost:4321/autopulse/` |
 | `npm run build`           | Build your production site to `./dist/`          |
 | `npm run preview`         | Preview your build locally, before deploying     |
