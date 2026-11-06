@@ -1,4 +1,6 @@
 from pathlib import Path
+import ast
+import itertools
 import re
 
 import pytest
@@ -7,6 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 CI = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 DEPLOY = (ROOT / ".github/workflows/deploy-docs.yml").read_text(encoding="utf-8")
+PROBE = (ROOT / ".github/workflows/verify-pages-gate.yml").read_text(encoding="utf-8")
 
 
 APPROVED_V7_PINS = {
@@ -15,7 +18,7 @@ APPROVED_V7_PINS = {
     "actions/setup-node": ("949feb2413d6458794dcd2491c4babbbce0c15c1", "v7.1.0", 2),
 }
 
-DOCS_AUDIT_COMMAND = "npm audit --omit=dev --audit-level=high"
+VALIDATOR = (ROOT / "grubby-galaxy/scripts/validate-docs.mjs").read_text(encoding="utf-8")
 
 
 def _extract_job(workflow: str, job_name: str) -> str:
@@ -105,11 +108,10 @@ def test_release_cells_compare_both_builds_before_installation(shell: str) -> No
 
 
 def test_docs_workflows_pin_actions_and_verify_committed_base_path() -> None:
-    assert "npm run build" in CI and "--base" not in CI and "pages: write" not in CI
-    assert "configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d" in DEPLOY
-    assert "pages: write" in DEPLOY and "id-token: write" in DEPLOY
-    assert '${{ steps.pages.outputs.origin }}' in DEPLOY
-    assert '${{ steps.pages.outputs.base_path }}' in DEPLOY
+    assert "--base" not in CI and "pages: write" not in CI
+    assert "configure-pages@" not in DEPLOY
+    config = (ROOT / "grubby-galaxy/scripts/docs-provenance.mjs").read_text(encoding="utf-8")
+    assert "site: 'https://ajason13.github.io', base: '/autopulse/'" in config
     assert all(
         re.fullmatch(r"[0-9a-f]{40}", sha)
         for sha in re.findall(r"uses:\s*[^@\s]+@([^\s#]+)", DEPLOY)
@@ -117,48 +119,96 @@ def test_docs_workflows_pin_actions_and_verify_committed_base_path() -> None:
 
 
 def test_docs_dependency_audit_is_an_unconditional_fail_closed_gate() -> None:
-    docs_job = _extract_job(CI, "docs")
-    steps = _extract_step_blocks(docs_job)
-    audit_steps = [step for step in steps if "npm audit" in step]
+    for workflow, job_name in [(CI, "docs"), (DEPLOY, "build")]:
+        job = _extract_job(workflow, job_name)
+        steps = _extract_step_blocks(job)
+        commands = [step.strip() for step in steps if "- run:" in step]
+        assert commands[:2] == ["- run: npm ci", "- run: npm run validate:docs"]
+        assert "continue-on-error:" not in job
+        assert "always()" not in job
+        assert "shell: bash" in job
+    # Runtime negative tests exercise each rejected gate; this ensures the
+    # shared entry point still includes the required production audit.
+    assert "await run(['audit', '--omit=dev', '--audit-level=high']);" in VALIDATOR
 
-    assert len(audit_steps) == 1
-    audit_step = audit_steps[0]
-    assert audit_step.strip() == f"- run: {DOCS_AUDIT_COMMAND}"
 
-    # Keep the gate unconditional and on the job's fail-closed default Bash
-    # invocation. The exact standalone block also rejects multiline shell
-    # success overrides and the Bash error-suppression commands set +e and
-    # set +o errexit.
-    assert not re.search(r"^\s+if:\s*", audit_step, re.MULTILINE)
-    assert not re.search(r"^\s+shell:\s*", audit_step, re.MULTILINE)
-    step_continue = re.search(
-        r"^\s+continue-on-error:\s*(\S+)", audit_step, re.MULTILINE
-    )
-    assert step_continue is None or step_continue.group(1) == "false"
-    assert not re.search(rf"{re.escape(DOCS_AUDIT_COMMAND)}\s*(?:\|\||;|&&)", audit_step)
-    assert not re.search(
-        r"(?:^|[;&|]\s*)set\s+(?:\+e|\+o\s+errexit)(?:\s|$)",
-        audit_step,
-        re.MULTILINE,
-    )
+def test_pages_gate_is_main_only_and_privileged_job_executes_no_repo_code() -> None:
+    assert "pull_request" not in DEPLOY and "workflow_run" not in DEPLOY
+    assert "branches: [main]" in DEPLOY and "workflow_dispatch:" in DEPLOY
+    global_permissions = DEPLOY.split("permissions:\n", 1)[1].split("\n\n", 1)[0]
+    assert global_permissions.strip() == "contents: read"
+    build = _extract_job(DEPLOY, "build")
+    deploy = _extract_job(DEPLOY, "deploy")
+    eligibility = "github.ref == 'refs/heads/main'"
+    for job in [build, deploy]:
+        assert eligibility in job
+        assert "github.event_name == 'push'" in job
+        assert "github.event_name == 'workflow_dispatch'" in job
+        assert "continue-on-error:" not in job and "always()" not in job
+    assert "pages: write" not in build and "id-token: write" not in build
+    assert "persist-credentials: false" in build
+    assert "needs: build" in deploy and "needs.build.result == 'success'" in deploy
+    assert "needs.build.outputs.artifact-id != ''" in deploy
+    assert "pages: write" in deploy and "id-token: write" in deploy
+    assert "name: github-pages" in deploy
+    assert "run:" not in deploy and "checkout@" not in deploy
+    assert len(_extract_step_blocks(deploy)) == 1
 
-    job_continue = re.search(
-        r"^    continue-on-error:\s*(\S+)", docs_job, re.MULTILINE
-    )
-    assert job_continue is None or job_continue.group(1) == "false"
-    assert re.search(r"^        shell: bash$", docs_job, re.MULTILINE)
 
-    audit_index = steps.index(audit_step)
-    npm_ci_index = next(
-        index for index, step in enumerate(steps) if step.strip() == "- run: npm ci"
+def test_pages_uploads_only_validated_bytes_and_selects_same_run_artifact() -> None:
+    build = _extract_job(DEPLOY, "build")
+    steps = _extract_step_blocks(build)
+    validation = next(i for i, s in enumerate(steps) if s.strip() == "- run: npm run validate:docs")
+    upload = next(i for i, s in enumerate(steps) if "actions/upload-pages-artifact@" in s)
+    assert upload == validation + 2
+    assert 'github-pages-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}' in steps[validation + 1]
+    assert "steps.identity.outputs.artifact-name" in steps[upload]
+    assert "path: grubby-galaxy/dist" in steps[upload]
+    assert "include-hidden-files: true" in steps[upload]
+    assert upload == len(steps) - 1
+    deploy = _extract_job(DEPLOY, "deploy")
+    assert "artifact_name: ${{ needs.build.outputs.artifact-name }}" in deploy
+    assert "artifact-id: ${{ steps.upload.outputs.artifact_id }}" in build
+    assert "artifact-name: ${{ steps.identity.outputs.artifact-name }}" in build
+    assert "cancel-in-progress: false" in DEPLOY
+
+
+def test_hosted_gate_probe_cannot_publish_or_deploy() -> None:
+    assert "push:" in PROBE and "workflow_dispatch:" in PROBE
+    assert "contents: read" in PROBE and "write" not in PROBE
+    assert "pull_request_target" not in PROBE and "workflow_run" not in PROBE
+    assert "upload" not in PROBE and "deploy-pages@" not in PROBE
+    assert "test_ci_workflow_contract.py" in PROBE
+    assert "node --test grubby-galaxy/tests/docs-provenance.test.mjs" in PROBE
+    for action, sha in re.findall(r"uses:\s*([^@\s]+)@([^\s#]+)", PROBE):
+        assert action in APPROVED_V7_PINS
+        assert sha == APPROVED_V7_PINS[action][0]
+
+
+def _condition(job: str, **context: str) -> bool:
+    expression = re.search(r"^    if: (.+)$", job, re.MULTILINE).group(1)
+    for key, value in context.items():
+        expression = expression.replace(key, repr(value))
+    tree = ast.parse(expression.replace("&&", " and ").replace("||", " or "), mode="eval")
+    assert all(isinstance(node, (
+        ast.Expression, ast.BoolOp, ast.Compare, ast.Constant,
+        ast.And, ast.Or, ast.Eq, ast.NotEq,
+    )) for node in ast.walk(tree))
+    return eval(compile(tree, "<workflow-condition>", "eval"), {"__builtins__": {}})
+
+
+@pytest.mark.parametrize("ref,event,result,artifact", list(itertools.product(
+    ["refs/heads/main", "refs/heads/feature", "refs/tags/main"],
+    ["push", "workflow_dispatch", "pull_request"],
+    ["success", "failure", "cancelled", "skipped"], ["42", ""],
+)))
+def test_push_and_manual_gate_scenarios(ref, event, result, artifact) -> None:
+    context = {
+        "github.ref": ref, "github.event_name": event,
+        "needs.build.result": result, "needs.build.outputs.artifact-id": artifact,
+    }
+    eligible = ref == "refs/heads/main" and event in {"push", "workflow_dispatch"}
+    assert _condition(_extract_job(DEPLOY, "build"), **context) == eligible
+    assert _condition(_extract_job(DEPLOY, "deploy"), **context) == (
+        eligible and result == "success" and bool(artifact)
     )
-    assert audit_index == npm_ci_index + 1
-    for required_later_step in (
-        "npx playwright install --with-deps chromium",
-        "npm run build",
-        "npm run test:smoke",
-        "npm run test:e2e",
-    ):
-        assert audit_index < next(
-            index for index, step in enumerate(steps) if required_later_step in step
-        )

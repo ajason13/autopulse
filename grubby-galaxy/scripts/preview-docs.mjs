@@ -1,9 +1,15 @@
 import { build, preview } from 'astro';
 import { baseURL, port } from '../playwright-server.mjs';
+import { productionConfig, verifyBuild } from './docs-provenance.mjs';
 
 // The API stays in this process; the Astro CLI can auto-background under agents.
-await build({});
+if (process.env.AUTOPULSE_DOCS_PREBUILT === '1') await verifyBuild();
+else {
+	if (process.env.AUTOPULSE_DOCS_PREBUILT) throw new Error('Invalid AUTOPULSE_DOCS_PREBUILT mode');
+	await build({});
+}
 const server = await preview({
+	...productionConfig,
 	server: { host: '127.0.0.1', port, open: false },
 	vite: { preview: { strictPort: true } },
 });

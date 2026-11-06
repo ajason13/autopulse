@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createServer as createSocket } from 'node:net';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { recordBuild, verifyBuild, provenanceFile } from '../../scripts/docs-provenance.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -19,12 +20,12 @@ function close(server) {
 	return new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 }
 
-async function runProbe(port, fail = false) {
+async function runProbe(port, fail = false, prebuilt = false) {
 	const child = spawn(process.execPath, [
 		'node_modules/@playwright/test/cli.js', 'test', '--config', 'playwright.lifecycle.config.ts',
 	], {
 		cwd: root,
-		env: { ...process.env, AUTOPULSE_DOCS_PORT: String(port), AUTOPULSE_PROBE_FAIL: fail ? '1' : '0' },
+		env: { ...process.env, AUTOPULSE_DOCS_PORT: String(port), AUTOPULSE_PROBE_FAIL: fail ? '1' : '0', AUTOPULSE_DOCS_PREBUILT: prebuilt ? '1' : '' },
 		stdio: ['ignore', 'pipe', 'pipe'],
 		timeout: 150_000,
 	});
@@ -64,6 +65,40 @@ test('browser verification owns its server and rebuilds before readiness', { tim
 			assert.match(result.output, /AutoPulse current-build preview ready/);
 			assert.match(result.output, fail ? /1 failed/ : /1 passed/);
 			// Rebinding proves no owned listener remains after Playwright teardown.
+			await listen(socket, port);
+			await close(socket);
+		});
+	}
+
+	await t.test('prebuilt mode rejects missing or stale provenance before readiness', async () => {
+		const socket = createSocket();
+		const port = await listen(socket);
+		await close(socket);
+		await rm(new URL(`../../dist/${provenanceFile}`, import.meta.url), { force: true });
+		for (const stale of [false, true]) {
+			if (stale) {
+				await recordBuild();
+				await writeFile(new URL('../../dist/unvalidated.txt', import.meta.url), 'unexpected bytes');
+			}
+			const result = await runProbe(port, false, true);
+			assert.notEqual(result.code, 0, result.output);
+			assert.doesNotMatch(result.output, /AutoPulse current-build preview ready/);
+			await listen(socket, port);
+			await close(socket);
+		}
+		await rm(new URL('../../dist/unvalidated.txt', import.meta.url));
+	});
+
+	for (const fail of [false, true]) {
+		await t.test(`prebuilt mode preserves bytes and releases its port after ${fail ? 'failure' : 'success'}`, async () => {
+			const socket = createSocket();
+			const port = await listen(socket);
+			await close(socket);
+			const original = await recordBuild();
+			const result = await runProbe(port, fail, true);
+			assert.equal(result.code, fail ? 1 : 0, result.output);
+			assert.match(result.output, /AutoPulse current-build preview ready/);
+			assert.deepEqual(await verifyBuild(), original);
 			await listen(socket, port);
 			await close(socket);
 		});
