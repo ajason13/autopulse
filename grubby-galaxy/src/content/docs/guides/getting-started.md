@@ -142,22 +142,19 @@ Windows PowerShell:
 
 ## Optional: run the documentation site
 
-Node.js 22.12+ is required by the docs toolchain; AutoPulse pins Node 24 in
-`grubby-galaxy/.nvmrc` for local builds and deployment. With Unix `nvm` installed:
+The docs site uses **Node.js 24**, pinned in `grubby-galaxy/.nvmrc`, and locked
+npm dependencies. Follow the shared
+[docs setup guide](https://github.com/ajason13/autopulse/blob/main/grubby-galaxy/README.md#local-development)
+for native **Windows PowerShell** (official Node x64 installer or ZIP,
+`npm.cmd ci`) or **macOS/Linux** (Unix `nvm`, `npm ci`). It includes dev,
+build, preview, Chromium installation, and both browser suites.
 
-```sh
-cd grubby-galaxy
-nvm install
-nvm use
-npm install
-npm run dev
-```
-
-The docs will be available at `http://localhost:4321/autopulse/`. Stop the server
-with Ctrl+C and return to the repository root before running Python checks.
-See the [docs README](https://github.com/ajason13/autopulse/blob/main/grubby-galaxy/README.md)
-for build and browser checks. Native Windows Node/docs onboarding is tracked
-separately in [#155](https://github.com/ajason13/autopulse/issues/155).
+The local URL is `http://localhost:4321/autopulse/`. Stop any manually started
+server with Ctrl+C before browser checks, and return to the repository root
+before Python checks. See the
+[Windows docs verification record](https://github.com/ajason13/autopulse/blob/main/docs/qa/windows-docs-onboarding.md)
+for executed OS cells and Windows 10 limitations; docs verification does not
+establish desktop release support.
 
 Next, explore the [Engine Data Contract](../../specs/us-001-engine-data-contract/)
 for the sensor data contract. See the
