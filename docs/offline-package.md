@@ -45,11 +45,19 @@ The only installed command is `autopulse-debug`. For example:
 ```text
 autopulse-debug validate-frame --powertrain ICE --file SANITIZED_FRAME_JSON
 autopulse-debug replay-ice --jsonl SANITIZED_REPLAY_JSONL
+autopulse-debug analyze-ice --jsonl SYNTHETIC_ICE_JSONL
 ```
 
 Inputs and outputs remain on the operator-controlled filesystem. Debug output
 is sanitized, but vehicle-derived identifiers and raw telemetry must not be
 placed in shared support artifacts.
+
+`analyze-ice` connects strict raw ICE validation, replay, per-identity analysis,
+and sanitized JSON-LD export. The repository's
+[synthetic example](../examples/README.md) supplies a standalone fixture,
+installation commands, rejection accounting, and explicit expected results.
+Copy the fixture separately when running outside the checkout. The wheel
+does not require the tests package or repository fixtures at runtime.
 
 ## Safety boundary
 

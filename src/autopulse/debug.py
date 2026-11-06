@@ -26,6 +26,7 @@ from autopulse.data.validator import (
     validate_frame,
 )
 from autopulse.replayer import ReplayMode, replay_ev_sequence
+from autopulse.offline_workflow import analyze_ice_jsonl
 from autopulse.virtual_replay import (
     EVMockAdapter,
     JSONLProvider,
@@ -125,6 +126,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Path to a JSONL file containing ICE rows.",
     )
     preview_alerts_parser.set_defaults(func=_preview_alerts_command)
+
+    analyze_parser = subparsers.add_parser(
+        "analyze-ice",
+        help="Validate canonical ICE JSONL, replay, analyze, and export JSON-LD observations.",
+    )
+    analyze_parser.add_argument("--jsonl", required=True, type=Path)
+    analyze_parser.set_defaults(func=_analyze_ice_command)
 
     inspect_guards_parser = subparsers.add_parser(
         "inspect-guards",
@@ -238,6 +246,18 @@ def _preview_alerts_command(args: argparse.Namespace) -> int:
         alerts=len(alerts),
     )
     _write_json(alerts)
+    return 0
+
+
+def _analyze_ice_command(args: argparse.Namespace) -> int:
+    try:
+        with args.jsonl.open(encoding="utf-8") as handle:
+            report = analyze_ice_jsonl(handle)
+        _write_json(report)
+    except (OSError, UnicodeError, ValueError, TypeError, OverflowError):
+        # No exception text or filesystem path crosses this output boundary.
+        _write_json({"ok": False, "error": "offline_analysis_failed"})
+        return 1
     return 0
 
 
