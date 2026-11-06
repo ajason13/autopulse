@@ -68,6 +68,10 @@ These Unix examples assume you supply local input files. In PowerShell, use
 `.\.venv\Scripts\autopulse-debug.exe` and `.\.venv\Scripts\python.exe`
 instead; Getting Started includes a complete synthetic example.
 
+For a complete validation, replay, analysis, and JSON-LD export workflow, run
+the checked-in [synthetic ICE example](examples/README.md). It includes healthy
+and deliberately anomalous rows, rejected inputs, and two independent identities.
+
 Do not add raw VINs, raw diagnostic payload bytes, seed-key material, tokens, or private workspace links to debug fixtures or logs.
 
 ## Documentation Site
