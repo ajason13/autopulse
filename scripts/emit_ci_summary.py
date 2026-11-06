@@ -18,6 +18,7 @@ ALLOWED = re.compile(
     r"Built (?:wheel|sdist) archive policy \(`validate_archive\(\)`\): PASS|"
     r"Installed validator/schema resource smoke: PASS|"
     r"Installed offline CLI smoke: PASS|"
+    r"Installed synthetic ICE replay/analysis/export: PASS|"
     r"`autopulse\.live` absence \(metadata and import\): PASS|"
     r"AutoPulse (?:wheel|sdist): `autopulse-[A-Za-z0-9_.-]+` \(`sha256:[0-9a-f]{64}`\)|"
     r"Wheelhouse manifest SHA-256: `[0-9a-f]{64}`|"

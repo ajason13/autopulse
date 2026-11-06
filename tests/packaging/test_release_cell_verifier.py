@@ -5,10 +5,17 @@ import os
 from pathlib import Path
 import sys
 import zipfile
+from copy import deepcopy
+import json
+import subprocess
+
+import pytest
 
 from scripts.verify_release_cell import (
     _pip_install_command,
     _require_failed_install,
+    _check_analysis_report,
+    _verify_offline_analysis,
 )
 
 
@@ -106,3 +113,87 @@ def test_pip_install_command_contains_every_fail_closed_flag(tmp_path: Path) -> 
     assert "--no-index" in command
     assert "--require-hashes" in command
     assert "--only-binary=:all:" in command
+
+
+@pytest.fixture
+def analysis_report(capsys):
+    from autopulse.debug import main
+
+    fixture = Path(__file__).resolve().parents[2] / "examples" / "synthetic-ice.jsonl"
+    assert main(["analyze-ice", "--jsonl", str(fixture)]) == 0
+    return json.loads(capsys.readouterr().out)
+
+
+def test_analysis_check_accepts_public_example_and_tiny_healthy_score(analysis_report):
+    _check_analysis_report(json.dumps(analysis_report))
+    analysis_report["vehicles"][0]["observations"][0]["failure_probability"] = 1e-16
+    _check_analysis_report(json.dumps(analysis_report))
+
+
+@pytest.mark.parametrize("defect", [
+    "accounting", "rejection", "partition", "missing_vehicle", "missing_observation",
+    "label", "score", "anomaly", "timestamp", "identity", "type", "uuid", "context",
+    "raw_frame", "context_payload", "summary_payload", "summary_value", "nan", "infinity", "missing_field",
+])
+def test_analysis_check_rejects_broken_or_unsanitized_results(analysis_report, defect):
+    report = deepcopy(analysis_report)
+    observation = report["vehicles"][1]["observations"][1]
+    if defect == "accounting":
+        report["accepted_frames"] = 8
+    elif defect == "rejection":
+        report["rejections"][1]["stage"] = "input"
+    elif defect == "partition":
+        report["vehicles"].reverse()
+    elif defect == "missing_vehicle":
+        report["vehicles"].pop()
+    elif defect == "missing_observation":
+        report["vehicles"][1]["observations"].pop()
+    elif defect == "raw_frame":
+        observation["obd_frame"] = {"payload_bytes": "must-not-export"}
+    elif defect == "context_payload":
+        observation["@context"]["payload_bytes"] = "must-not-export"
+    elif defect == "summary_payload":
+        observation["window_summary"]["payload_bytes"] = "must-not-export"
+    elif defect == "summary_value":
+        observation["window_summary"]["engine_rpm"]["avg"] = 901
+    elif defect == "missing_field":
+        observation.pop("primary_pid")
+    else:
+        key, value = {
+            "label": ("failure_type", "NONE"), "score": ("failure_probability", 0.1),
+            "anomaly": ("is_anomaly", False), "timestamp": ("timestamp", 1779789603000),
+            "identity": ("vin_hashed", "a" * 64), "type": ("@type", "other"),
+            "uuid": ("@id", "not-a-uuid"), "context": ("@context", {}),
+            "nan": ("failure_probability", float("nan")),
+            "infinity": ("failure_probability", float("inf")),
+        }[defect]
+        observation[key] = value
+    with pytest.raises(ValueError):
+        _check_analysis_report(json.dumps(report))
+
+
+def test_analysis_runner_supplies_only_fixture_and_checks_cli_result(
+    tmp_path, monkeypatch, analysis_report,
+):
+    def run(command, **kwargs):
+        assert command == ["installed-cli", "analyze-ice", "--jsonl", str(tmp_path / "synthetic-ice.jsonl")]
+        assert kwargs == dict(cwd=tmp_path, env={"PIP_NO_INDEX": "1"}, check=True,
+                              capture_output=True, text=True)
+        assert [p.name for p in tmp_path.iterdir()] == ["synthetic-ice.jsonl"]
+        assert len((tmp_path / "synthetic-ice.jsonl").read_text().splitlines()) == 8
+        return subprocess.CompletedProcess(command, 0, json.dumps(analysis_report), "")
+
+    monkeypatch.setattr("scripts.verify_release_cell.subprocess.run", run)
+    _verify_offline_analysis(Path("installed-cli"), work=tmp_path, environment={"PIP_NO_INDEX": "1"})
+    analysis_report["vehicles"] = []
+    with pytest.raises(ValueError):
+        _verify_offline_analysis(Path("installed-cli"), work=tmp_path, environment={"PIP_NO_INDEX": "1"})
+
+
+def test_analysis_runner_propagates_missing_functionality(tmp_path, monkeypatch):
+    def run(command, **kwargs):
+        raise subprocess.CalledProcessError(2, command)
+
+    monkeypatch.setattr("scripts.verify_release_cell.subprocess.run", run)
+    with pytest.raises(subprocess.CalledProcessError):
+        _verify_offline_analysis(Path("installed-cli"), work=tmp_path, environment={})
