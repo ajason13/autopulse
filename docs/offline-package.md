@@ -59,6 +59,15 @@ installation commands, rejection accounting, and explicit expected results.
 Copy the fixture separately when running outside the checkout. The wheel
 does not require the tests package or repository fixtures at runtime.
 
+Every CI release cell runs this same synthetic example through the installed
+wheel's CLI in a temporary directory outside the checkout, with `PYTHONPATH`
+and `PYTHONHOME` unset. The verifier copies only the standalone input fixture;
+it checks all eight rows, the five healthy/HDF observations, three explicit
+rejections, identity isolation, timestamps and finite sanitized JSON-LD fields.
+A missing command or unexpected result fails the cell before its PASS summary.
+The existing hash and missing-wheel rejection probes still run. Hosted Windows
+Server cells provide compatibility evidence, not native Windows 11 validation.
+
 ## Safety boundary
 
 This package does not support live adapters, vehicle capture, VIN reads, road

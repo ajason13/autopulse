@@ -18,6 +18,7 @@ def test_summary_accepts_the_real_release_cell_shape(tmp_path: Path, monkeypatch
         "- Built sdist archive policy (`validate_archive()`): PASS\n"
         "- Installed validator/schema resource smoke: PASS\n"
         "- Installed offline CLI smoke: PASS\n"
+        "- Installed synthetic ICE replay/analysis/export: PASS\n"
         "- `autopulse.live` absence (metadata and import): PASS\n"
         "- AutoPulse wheel: `autopulse-0.1.0-py3-none-any.whl` (`sha256:" + "a" * 64 + "`)\n"
         "- AutoPulse sdist: `autopulse-0.1.0.tar.gz` (`sha256:" + "b" * 64 + "`)\n"
@@ -29,3 +30,4 @@ def test_summary_accepts_the_real_release_cell_shape(tmp_path: Path, monkeypatch
     monkeypatch.setattr("sys.argv", ["emit", "--source", str(source), "--commit", "e" * 40, "--output", str(output)])
     assert main() == 0
     assert "AutoPulse wheel" in output.read_text(encoding="utf-8")
+    assert "Installed synthetic ICE replay/analysis/export: PASS" in output.read_text(encoding="utf-8")
