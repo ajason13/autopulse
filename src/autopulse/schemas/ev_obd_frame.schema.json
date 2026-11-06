@@ -17,6 +17,8 @@
     },
     "vin_hashed": {
       "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
       "pattern": "^[a-f0-9]{64}$"
     },
     "protocol": {

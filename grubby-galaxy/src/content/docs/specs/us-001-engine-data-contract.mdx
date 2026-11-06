@@ -37,6 +37,8 @@ US-001 accepts only passive diagnostic data from SAE J1979 Mode 01 or SAE J1979-
     },
     "vin_hashed": {
       "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
       "pattern": "^[a-f0-9]{64}$"
     },
     "protocol": {
