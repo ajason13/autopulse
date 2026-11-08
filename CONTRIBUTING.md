@@ -20,6 +20,10 @@ It installs the editable local package, pytest, and the release tools needed
 by the full suite (including `uv` for the lockfile contract). Activation and
 `PYTHONPATH` overrides are unnecessary.
 
+For repeatable native Windows package checks, use the
+[Windows Python verification procedure](docs/qa/windows-python-verification.md).
+It records separate CPython 3.13/3.14 results without adopting release support.
+
 Runtime-only installation and focused-test installation are smaller options,
 but the full suite also needs `requirements-release.txt`. The guide explains
 the dependency files and extras; these source-development commands are
